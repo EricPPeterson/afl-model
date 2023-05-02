@@ -876,7 +876,7 @@ while(n < 23){
     away <- rpois(100000,away_adj[1,1]) * pts_per_kick
     away_mean <- mean(away)
     total <- home+away
-    total_quant <- c(mean(total), quantile(total, probs = c(0.45,.55)))
+    total_quant <- c(mean(total), quantile(total, probs = c(0.45,0.55)))
     output <- c(new_week$Date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
     colnames(final_df) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
@@ -929,3 +929,25 @@ while(n < 23){
   n <- n+1
 }
 
+################################################################################################################
+#test vs markets to see performance
+################################################################################################################
+#totals
+output_df <- output_df %>% mutate_at(c(4:56), as.numeric)
+output_df$over_bet <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Open, 'under','no bet')
+output_df$over_bet <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Open, 'over',output_df$over_bet)
+output_df$over_act <- ifelse((as.numeric(output_df$Home.Score) + as.numeric(output_df$Away.Score)) > output_df$Total.Score.Open, 'over', 'under')
+output_df$over_outcome <- ifelse(output_df$over_bet == output_df$over_act,1,-1)
+output_df$over_outcome <- ifelse(output_df$over_bet == 'no bet', 0, output_df$over_outcome)
+output_df$cum_over <- cumsum(output_df$over_outcome)
+
+output_df$over_bet_close <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Close, 'under','no bet')
+output_df$over_bet_close <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Close, 'over',output_df$over_bet_close)
+output_df$over_outcome_close <- ifelse(output_df$over_bet_close == output_df$over_act,1,-1)
+output_df$over_outcome_close <- ifelse(output_df$over_bet_close == 'no bet', 0, output_df$over_outcome_close)
+output_df$cum_over_close <- cumsum(output_df$over_outcome_close)
+
+#sides
+output_df$side_bet <- ifelse(output_df$side > 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
+output_df$side_act <- ifelse(output_df$Home.Line.Open < 0 & (output_df$Home.Score - output_df$Away.Score) > abs(output_df$Home.Line.Open), 'home', 'away')
+output_df$side_outcome <- ifelse(output_df$side_bet == output_df$side_act, 'win', 'loss')
