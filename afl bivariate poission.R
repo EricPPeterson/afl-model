@@ -943,9 +943,8 @@ output_df$cum_over <- cumsum(output_df$over_outcome)
 
 output_df$over_bet_close <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Close, 'under','no bet')
 output_df$over_bet_close <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Close, 'over',output_df$over_bet_close)
-output_df$over_outcome_close <- ifelse(output_df$over_bet_close == output_df$over_act,1,-1)
-output_df$over_outcome_close <- ifelse(output_df$over_bet_close == 'no bet', 0, output_df$over_outcome_close)
-output_df$cum_over_close <- cumsum(output_df$over_outcome_close)
+output_df$over_outcome_close <- ifelse(output_df$over_bet_close == output_df$over_act,'win','loss')
+output_df$over_outcome_close <- ifelse(output_df$over_bet_close == 'no bet', 'no bet', output_df$over_outcome_close)
 
 #sides
 output_df$side_bet <- ifelse(output_df$side > 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
