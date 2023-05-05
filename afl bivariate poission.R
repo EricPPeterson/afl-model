@@ -13,6 +13,70 @@ library(bayestestR)
 library(xgboost)
 library(gbm)
 
+#################################################################################################################
+#Odds API
+#################################################################################################################
+theODDS_base <- 'https://api.the-odds-api.com/v4/sports/'
+theODDS_sport  <- 'aussierules_afl/'
+theODDS_key <- 'odds-history?apiKey=0a7476c0c60b98dc9ac1655f8a1a6c18&'
+theODDS_region <- 'regions=au'
+theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
+start_date <- as.Date('2023-05-04') 
+theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
+
+
+#pull API data
+start_date <- as.Date('2022-03-10')
+odds_df <- data.frame()
+y <- 1
+
+while(start_date <= as.Date('2023-05-04')){
+  theODDS_fullAPI <- paste0(theODDS_base, theODDS_sport, theODDS_key, theODDS_region, theODDS_markets, theODDS_date)
+  
+  pull_API <- fromJSON(theODDS_fullAPI)
+  afl_odds <- pull_API$data
+  odds_df <- rbind(odds_df, afl_odds)
+  start_date <- start_date + 7
+  print(y)
+  y <- y+1
+}
+
+odds_df <- odds_df %>% select(-c(id, sport_key, sport_title)) %>% unique()
+odds_df$commence_time <- as.Date(odds_df$commence_time, format = '%Y-%m-%d')
+
+output_odds <- data.frame()
+for(i in 1:nrow(odds_df)){
+  teams <- odds_df[c(i:i),] %>% select(c(commence_time, home_team, away_team))
+  first_level <- odds_df$bookmakers[[i]]
+  
+  over <- data.frame()
+  under <- data.frame()
+  hm_side <- data.frame()
+  aw_side <- data.frame()
+  
+  for(j in 1:nrow(first_level)){
+    bookies <- first_level$markets[[j]]
+    bookies_spread <- bookies %>% filter(key == 'spreads')
+    if(nrow(bookies_spread) == 0){next}
+    bookies_spread_home <- bookies_spread$outcomes[[1]] %>% filter(name == teams$home_team)
+    bookies_spread_away <- bookies_spread$outcomes[[1]] %>% filter(name == teams$away_team)
+    bookies_total <- bookies %>% filter(key == 'totals')
+    if(nrow(bookies_total) == 0){next}
+    bookies_total_over <- bookies_total$outcomes[[1]] %>% filter(name == 'Over')
+    bookies_total_under <- bookies_total$outcomes[[1]] %>% filter(name == 'Under')
+    hm_side <- rbind(hm_side, bookies_spread_home)
+    aw_side <- rbind(aw_side, bookies_spread_away)
+    over <- rbind(over, bookies_total_over)
+    under <- rbind(under, bookies_total_under)
+  }
+  teams$over <- min(over$point)
+  teams$under <- max(under$point)
+  teams$home_line <- ifelse(hm_side$point[1] < 0, min(hm_side$point),max(hm_side$point))
+  teams$away_line <- ifelse(aw_side$point[1] < 0 , min(aw_side$point), max(aw_side$point))
+  
+  output_odds <- rbind(output_odds, teams)
+}
+
 ##########################################################################################################
 #fetch historical odds to backtest
 ##########################################################################################################
@@ -418,7 +482,8 @@ defensive_correction <- function(df, df2){
     select(c(opposition, mean_game_shots)) %>% unique()
   df3$league_mean <- sum(df2$shots_at_goal/n_distinct(df2$match_id))/2
   df3 <- df3 %>%
-    mutate(def_pct = mean_game_shots / league_mean)
+    mutate(def_diff = mean_game_shots - league_mean,
+           def_pct = mean_game_shots / league_mean)
   colnames(df3)[1] <- 'player_team'
   return(df3)
 }
@@ -830,19 +895,24 @@ for(i in 1:nrow(sched_2022_weather)){
 ###############################################################################################################
 #loop through the schedule
 ###############################################################################################################
+library(extraDistr)
 update_df_final <- data.frame(sched_2022) %>% select(home.team.name) %>% unique()
 colnames(update_df_final) <- 'player_team'
 lambda_loop <- lambda_initial_2022
 lambda_loop <- lambda_loop %>% 
   mutate(alpha = mean_shots * 2,
          beta = 2)
+def_corr_update <- def_stats_2021
 updated_stats <- season_pull(2022,2022)
 output_df <- data.frame()
+defense_df <- data.frame()
+combined_defense <- def_stats_2021
+colnames(combined_defense) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
 
 #set initial n
 n = 1
 
-while(n < 23){
+while(n < 24){
   final_df <- data.frame()
   #filter to just current week
   new_week <- sched_2022_weather %>% filter(round.roundNumber == n)
@@ -852,8 +922,8 @@ while(n < 23){
     home_lambda <- lookup(new_week$home.team.name[k], lambda_loop$player_team, lambda_loop$mean_shots)
     away_lambda <- lookup(new_week$away.team.name[k], lambda_loop$player_team, lambda_loop$mean_shots)
     #lookup adjustment for defense
-    home_def <- lookup(new_week$home.team.name[k], def_stats_2021$player_team, def_stats_2021$def_pct)
-    away_def <- lookup(new_week$away.team.name[k], def_stats_2021$player_team, def_stats_2021$def_pct)
+    home_def <- lookup(new_week$home.team.name[k], def_corr_update$player_team, def_corr_update$def_pct)
+    away_def <- lookup(new_week$away.team.name[k], def_corr_update$player_team, def_corr_update$def_pct)
     #travel_adj 
     travel_adj <- travel_coeff * sched_2022_weather$travel[k]
     #HFA
@@ -871,11 +941,11 @@ while(n < 23){
     pts_per_kick <- predict(ensemble_model, lm_df)
     
     #simulate 100,000 games with home_adj and away_adj as lambdas
-    home <- rpois(100000,home_adj) * pts_per_kick
-    home_mean <- mean(home)
-    away <- rpois(100000,away_adj[1,1]) * pts_per_kick
-    away_mean <- mean(away)
-    total <- home+away
+    biv_pois <- as.data.frame(rbvpois(100000, home_adj, away_adj[1,1],0) * pts_per_kick)
+    colnames(biv_pois) <- c('home', 'away')
+    home_mean <- mean(biv_pois$home)
+    away_mean <- mean(biv_pois$away)
+    total <- biv_pois$home + biv_pois$away
     total_quant <- c(mean(total), quantile(total, probs = c(0.45,0.55)))
     output <- c(new_week$Date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
@@ -886,17 +956,39 @@ while(n < 23){
   #attach betting odds to final_df
   final_df <- left_join(final_df, afl_historical_odds_join, by = (c('date', 'home_team', 'away_team')))
   final_df <- data.frame(final_df)
-  #update lambdas / pts per shot
+  #update lambdas / pts per shot / defense
   updated_stats_week <- updated_stats %>% filter(match_round == n)
   stats_grouped_update <- stats_create_2021(updated_stats_week)
-  defense_grouped_update <- defense_func(updated_stats_week)
-  def_corr_update <- defensive_correction(defense_grouped_update, updated_stats_week)
   
+  #update defense stats
+  defense_grouped_update <- defense_func(updated_stats_week)
+  def_weeks_update <- defensive_correction(defense_grouped_update, updated_stats_week)
+  colnames(def_weeks_update) <- c('player_team', paste0('mean_game_shots_',n), paste0('league_mean_',n), paste0('def_diff_',n), paste0('def_pct_',n))
+  combined_defense <- left_join(combined_defense, def_weeks_update, by = 'player_team')
+  mean_weeks_update <- combined_defense %>% select(c('player_team', matches('mean_game_'))) 
+  mean_weeks_update <- mean_weeks_update %>%
+      mutate(data_sum = rowSums(across(where(is.numeric)), na.rm = TRUE) - mean_game_shots_0,
+             update_alpha = (mean_game_shots_0 * 2) + data_sum,
+             update_beta = 2 + n,
+             update_lambda = update_alpha / update_beta)
+  mean_league_update <- combined_defense %>% select(c('player_team', matches('league_mean_'))) %>%
+    mutate(data_sum = rowSums(across(where(is.numeric)), na.rm=TRUE) - league_mean_0,
+           update_alpha = (league_mean_0 * 2) + data_sum,
+           update_beta = 2 + n,
+           update_lambda = update_alpha / update_beta)
+  def_corr_update <- data.frame(mean_league_update$player_team)
+  colnames(def_corr_update) <- 'player_team'
+  def_corr_update$league_mean <- lookup(def_corr_update$player_team, mean_league_update$player_team, mean_league_update$update_lambda)
+  def_corr_update$mean_game_shots <- lookup(def_corr_update$player_team, mean_weeks_update$player_team, mean_weeks_update$update_lambda)
+  def_corr_update <- def_corr_update %>%
+    mutate(def_diff = mean_game_shots - league_mean,
+           def_pct = mean_game_shots / league_mean)
+
   #update lambda
   update_lambda_rf <- predict(rf_gridsearch, newdata = stats_grouped_update[,-c(1:3)])
   update_lambda_gbm <- predict(gbm_model, newdata = stats_grouped_update[,-c(1:3)])
   update_lambda_xboost <- predict(xboost_model, newdata = stats_grouped_update[,-c(1:3)])
-  #create ensemble
+  #create ensemble        
   update_ensemble_df <- data.frame(cbind(update_lambda_rf, update_lambda_xboost, update_lambda_gbm))
   colnames(update_ensemble_df) <- c('preds_rf', 'preds_gbm', 'preds_xboost')
   update_ensemble_preds <- predict(ensemble_model, newdata = update_ensemble_df)
@@ -934,19 +1026,28 @@ while(n < 23){
 ################################################################################################################
 #totals
 output_df <- output_df %>% mutate_at(c(4:56), as.numeric)
+output_df <- output_df %>% select(-c(Kick.Off, Venue))
+output_df <- output_df %>% select(-c(12:15))
+output_df <- output_df %>% select(-c(14:22))
+output_df <- output_df %>% select(-c(34:41))
 output_df$over_bet <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Open, 'under','no bet')
 output_df$over_bet <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Open, 'over',output_df$over_bet)
 output_df$over_act <- ifelse((as.numeric(output_df$Home.Score) + as.numeric(output_df$Away.Score)) > output_df$Total.Score.Open, 'over', 'under')
-output_df$over_outcome <- ifelse(output_df$over_bet == output_df$over_act,1,-1)
-output_df$over_outcome <- ifelse(output_df$over_bet == 'no bet', 0, output_df$over_outcome)
-output_df$cum_over <- cumsum(output_df$over_outcome)
+output_df$over_outcome <- ifelse(output_df$over_bet == output_df$over_act,'win','loss')
+output_df$over_outcome <- ifelse(output_df$over_bet == 'no bet', 'no bet', output_df$over_outcome)
+table(output_df$over_outcome)
 
 output_df$over_bet_close <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Close, 'under','no bet')
 output_df$over_bet_close <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Close, 'over',output_df$over_bet_close)
 output_df$over_outcome_close <- ifelse(output_df$over_bet_close == output_df$over_act,'win','loss')
 output_df$over_outcome_close <- ifelse(output_df$over_bet_close == 'no bet', 'no bet', output_df$over_outcome_close)
+table(output_df$over_outcome_close)
 
 #sides
-output_df$side_bet <- ifelse(output_df$side > 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
-output_df$side_act <- ifelse(output_df$Home.Line.Open < 0 & (output_df$Home.Score - output_df$Away.Score) > abs(output_df$Home.Line.Open), 'home', 'away')
-output_df$side_outcome <- ifelse(output_df$side_bet == output_df$side_act, 'win', 'loss')
+output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open < 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
+output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open >= 0, 'home', output_df$side_bet)
+output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open < 0,  'away', output_df$side_bet)
+output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open > 0 & abs(output_df$side) < output_df$Home.Line.Open, 'away', output_df$side_bet)
+output_df$side_act <- ifelse(output_df$Home.Line.Open <= 0 & (output_df$Home.Score - output_df$Away.Score) > abs(output_df$Home.Line.Open), 'home', 'away')
+output_df$side_act <- ifelse(output_df$Home.Line.Open > 0 & (output_df$Away.Score - output_df$Home.Score) > output_df$Home.Line.Open, 'away', output_df$side_act)
+table(output_df$side_outcome)
