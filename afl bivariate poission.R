@@ -946,7 +946,7 @@ while(n < 24){
     home_mean <- mean(biv_pois$home)
     away_mean <- mean(biv_pois$away)
     total <- biv_pois$home + biv_pois$away
-    total_quant <- c(mean(total), quantile(total, probs = c(0.45,0.55)))
+    total_quant <- c(mean(total), quantile(total, probs = c(0.32,0.68)))
     output <- c(new_week$Date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
     colnames(final_df) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
@@ -1037,12 +1037,6 @@ output_df$over_outcome <- ifelse(output_df$over_bet == output_df$over_act,'win',
 output_df$over_outcome <- ifelse(output_df$over_bet == 'no bet', 'no bet', output_df$over_outcome)
 table(output_df$over_outcome)
 
-output_df$over_bet_close <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Close, 'under','no bet')
-output_df$over_bet_close <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Close, 'over',output_df$over_bet_close)
-output_df$over_outcome_close <- ifelse(output_df$over_bet_close == output_df$over_act,'win','loss')
-output_df$over_outcome_close <- ifelse(output_df$over_bet_close == 'no bet', 'no bet', output_df$over_outcome_close)
-table(output_df$over_outcome_close)
-
 #sides
 output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open < 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
 output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open >= 0, 'home', output_df$side_bet)
@@ -1050,4 +1044,10 @@ output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open < 0, 
 output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open > 0 & abs(output_df$side) < output_df$Home.Line.Open, 'away', output_df$side_bet)
 output_df$side_act <- ifelse(output_df$Home.Line.Open <= 0 & (output_df$Home.Score - output_df$Away.Score) > abs(output_df$Home.Line.Open), 'home', 'away')
 output_df$side_act <- ifelse(output_df$Home.Line.Open > 0 & (output_df$Away.Score - output_df$Home.Score) > output_df$Home.Line.Open, 'away', output_df$side_act)
+output_df$side_outcome <- ifelse(output_df$side_act == output_df$side_bet, 'win', 'loss')
 table(output_df$side_outcome)
+
+
+#######################################################################################################################
+#2023 season
+#######################################################################################################################
