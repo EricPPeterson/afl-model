@@ -130,6 +130,7 @@ season_pull <- function(x,y){
   return(df_season)
 }
 
+#pull stats from 2016-2020 to build initial model
 fry_stats <- season_pull(2016,2020)
 
 ########################################################################################################
@@ -426,9 +427,12 @@ home_base <- home_stats %>% filter(home_away == 'home') %>%
 #defensive adjustment
 ##########################################################################################################
 fry_stats_2021 <- fetch_player_stats_fryzigg(season = 2021)
+fry_stats_2022 <- fetch_player_stats_fryzigg(season = 2022)
 fry_stats_2021 <- fry_stats_2021 %>% filter(!(match_round %in% c('Semi Finals', 'Preliminary Finals', 'Grand Final', 'Finals Week 1')))
+fry_stats_2022 <- fry_stats_2022 %>% filter(!(match_round %in% c('Semi Finals', 'Preliminary Finals', 'Grand Final', 'Finals Week 1')))
 fry_stats_2021$match_round <- is.numeric(fry_stats_2021$match_round)
-fry_stats_2021$opposition <- NA
+fry_stats_2022$match_round <- is.numeric(fry_stats_2022$match_round)
+fry_stats_2021$opposition <- fry_stats_2022$opposition <- NA
 
 #create a column for who the opposition was in every game
 #will allow me to see what teams give up lots of shots
@@ -437,6 +441,15 @@ for(i in 1: nrow(fry_stats_2021)) {
     fry_stats_2021$opposition[i] <- fry_stats_2021$match_away_team[i]
   } else {
     fry_stats_2021$opposition[i] <- fry_stats_2021$match_home_team[i]
+  }
+}
+#create a column for who the opposition was in every game for 2022
+#will allow me to see what teams give up lots of shots in 2022
+for(i in 1: nrow(fry_stats_2022)) {
+  if(fry_stats_2022$player_team[i] == fry_stats_2022$match_home_team[i]){
+    fry_stats_2022$opposition[i] <- fry_stats_2022$match_away_team[i]
+  } else {
+    fry_stats_2022$opposition[i] <- fry_stats_2022$match_home_team[i]
   }
 }
 
@@ -468,9 +481,10 @@ defense_func <- function(df){
 
 #2021 defensive stats
 defense_grouped_2021 <- defense_func(fry_stats_2021)
-
+defense_grouped_2022 <- defense_func(fry_stats_2022)
 #check for NANs
 which(is.na(defense_grouped_2021))
+which(is.na(defense_grouped_2022))
 #none
 
 ##########################################################################################################
@@ -489,6 +503,7 @@ defensive_correction <- function(df, df2){
 }
 
 def_stats_2021 <- defensive_correction(defense_grouped_2021, fry_stats_2021)
+def_stats_2022 <- defensive_correction(defense_grouped_2022, fry_stats_2022)
 
 ###########################################################################################################
 #initial offensive stats from ensemble model
@@ -529,29 +544,42 @@ stats_create_2021 <- function(df){
 }
 
 stats_grouped_2021 <- stats_create_2021(fry_stats_2021)
-
+stats_grouped_2022 <- stats_create_2021(fry_stats_2022)
 #check for NANs
 which(is.na(stats_grouped_2021))
 colnames(stats_grouped_2021)[colSums(is.na(stats_grouped_2021)) > 0]
+which(is.na(stats_grouped_2022))
+colnames(stats_grouped_2022)[colSums(is.na(stats_grouped_2021)) > 0]
 
 #########################################################################################################
 #run models on 2021 data
 #########################################################################################################
 train_preds_rf_2021 <- data.frame(predict(rf_gridsearch, newdata = stats_grouped_2021[,-c(1:3)]))
+train_preds_rf_2022 <- data.frame(predict(rf_gridsearch, newdata = stats_grouped_2022[,-c(1:3)]))
 colnames(train_preds_rf_2021) <- 'preds_rf'
+colnames(train_preds_rf_2022) <- 'preds_rf'
 train_preds_gbm_2021 <- data.frame(predict(gbm_model, newdata = stats_grouped_2021[,-c(1:3)]))
+train_preds_gbm_2022 <- data.frame(predict(gbm_model, newdata = stats_grouped_2022[,-c(1:3)]))
 colnames(train_preds_gbm_2021) <- 'preds_gbm'
+colnames(train_preds_gbm_2022) <- 'preds_gbm'
 train_preds_xboost_2021 <- data.frame(predict(xboost_model, newdata = stats_grouped_2021[,-c(1:3)]))
+train_preds_xboost_2022 <- data.frame(predict(xboost_model, newdata = stats_grouped_2022[,-c(1:3)]))
 colnames(train_preds_xboost_2021) <- 'preds_xboost'
+colnames(train_preds_xboost_2022) <- 'preds_xboost'
 
 #lm ensemble
 ensemble_df_2021 <- bind_cols(stats_grouped_2021[c(1:3)],train_preds_rf_2021, train_preds_gbm_2021, train_preds_xboost_2021)
 ensemble_df_2021$ensemble_preds <- predict(ensemble_model, newdata = ensemble_df_2021[,-c(1:3)])
+ensemble_df_2022 <- bind_cols(stats_grouped_2022[c(1:3)],train_preds_rf_2022, train_preds_gbm_2022, train_preds_xboost_2022)
+ensemble_df_2022$ensemble_preds <- predict(ensemble_model, newdata = ensemble_df_2022[,-c(1:3)])
 
 ############################################################################################################
 #initial lambda per team 2022
 ############################################################################################################
 lambda_initial_2022 <- ensemble_df_2021 %>% 
+  dplyr :: group_by(player_team) %>%
+  dplyr :: summarise(mean_shots = mean(ensemble_preds))
+lambda_initial_2023 <- ensemble_df_2022 %>%
   dplyr :: group_by(player_team) %>%
   dplyr :: summarise(mean_shots = mean(ensemble_preds))
 
@@ -560,7 +588,7 @@ lambda_initial_2022 <- ensemble_df_2021 %>%
 #DFs needed <- HFA, HFA_home, HFA_away, def_stats_2021, travel_coeff
 ############################################################################################################
 
-
+############################from here#######################################################################
 ############################################################################################################
 #pts per shot by venue and weather
 ############################################################################################################
@@ -1160,3 +1188,22 @@ for(i in 1:nrow(sched_2023_weather)){
                                         fun = distHaversine)/1000
   print(i)
 }
+
+###############################################################################################################
+#loop through the schedule
+###############################################################################################################
+update_df_2023 <- data.frame(sched_2023) %>% select(home.team.name) %>% unique()
+colnames(update_df_2023) <- 'player_team'
+lambda_loop_2023 <- lambda_initial_2022
+lambda_loop_2023 <- lambda_loop_2023 %>% 
+  mutate(alpha = mean_shots * 2,
+         beta = 2)
+def_corr_update <- def_stats_2022
+updated_stats <- season_pull(2023,2023)
+output_df_2023 <- data.frame()
+defense_df_2023 <- data.frame()
+combined_defense_2023 <- def_stats_2022
+colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
+
+#set initial n
+n = 1
