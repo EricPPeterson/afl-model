@@ -12,6 +12,7 @@ library(lookup)
 library(bayestestR)
 library(xgboost)
 library(gbm)
+library(lubridate)
 
 #################################################################################################################
 #Odds API
@@ -81,9 +82,12 @@ for(i in 1:nrow(odds_df)){
 #fetch historical odds to backtest
 ##########################################################################################################
 afl_historical_odds <- read.csv("~/GitHub/afl model/afl_historical_odds.csv")
+colnames(afl_historical_odds) <- unlist(afl_historical_odds[1, ])
+afl_historical_odds <- tail(afl_historical_odds, -1)
+afl_historical_odds$Date <- as.Date(dmy(afl_historical_odds$Date))
 afl_historical_odds$season <- as.Date(afl_historical_odds$Date)
 afl_historical_odds$season <- format(afl_historical_odds$season, format = '%Y')
-afl_historical_odds_join <- afl_historical_odds %>% filter(season == 2022)
+afl_historical_odds_join <- afl_historical_odds %>% filter(season > 2021)
 afl_historical_odds_join <- afl_historical_odds_join %>% select(-c(season))
 
 #change Home.Team/Away.Team colnames to home_team/away_team
@@ -98,8 +102,6 @@ afl_historical_odds_join$home_team <- ifelse(afl_historical_odds_join$home_team 
 afl_historical_odds_join$away_team <- ifelse(afl_historical_odds_join$away_team == 'GWS Giants', 'Greater Western Sydney', afl_historical_odds_join$away_team)
 afl_historical_odds_join$away_team <- ifelse(afl_historical_odds_join$away_team == 'Brisbane', 'Brisbane Lions', afl_historical_odds_join$away_team)
 
-#make date into date object
-afl_historical_odds$Date <- as.Date(afl_historical_odds$Date)
 
 ##########################################################################################################
 #pull game statistics for five seasons
@@ -588,7 +590,6 @@ lambda_initial_2023 <- ensemble_df_2022 %>%
 #DFs needed <- HFA, HFA_home, HFA_away, def_stats_2021, travel_coeff
 ############################################################################################################
 
-############################from here#######################################################################
 ############################################################################################################
 #pts per shot by venue and weather
 ############################################################################################################
@@ -1192,14 +1193,14 @@ for(i in 1:nrow(sched_2023_weather)){
 ###############################################################################################################
 #loop through the schedule
 ###############################################################################################################
-update_df_2023 <- data.frame(sched_2023) %>% select(home.team.name) %>% unique()
-colnames(update_df_2023) <- 'player_team'
-lambda_loop_2023 <- lambda_initial_2022
+update_df_final_2023 <- data.frame(sched_2023) %>% select(home.team.name) %>% unique()
+colnames(update_df_final_2023) <- 'player_team'
+lambda_loop_2023 <- lambda_initial_2023
 lambda_loop_2023 <- lambda_loop_2023 %>% 
   mutate(alpha = mean_shots * 2,
          beta = 2)
-def_corr_update <- def_stats_2022
-updated_stats <- season_pull(2023,2023)
+def_corr_update_2023 <- def_stats_2022
+updated_stats_2023 <- season_pull(2023,2023)
 output_df_2023 <- data.frame()
 defense_df_2023 <- data.frame()
 combined_defense_2023 <- def_stats_2022
@@ -1207,3 +1208,139 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 
 #set initial n
 n = 1
+
+while(n < 7){
+  final_df_2023 <- data.frame()
+  #filter to just current week
+  new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
+  
+  for(k in 1:nrow(new_week)){
+    #lookup mean shots for home and away team
+    home_lambda_2023 <- lookup(new_week_2023$home.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
+    away_lambda_2023 <- lookup(new_week_2023$away.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
+    #lookup adjustment for defense
+    home_def_2023 <- lookup(new_week_2023$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
+    away_def_2023 <- lookup(new_week_2023$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
+    #travel_adj 
+    travel_adj_2023 <- travel_coeff * sched_2023_weather$travel[k]
+    #HFA
+    hfa_adj_2023 <- home_base[2] - travel_int  - (sched_2023_weather$travel[k] * travel_coeff)
+    #adjusted lambdas
+    home_adj_2023 <- (home_lambda_2023 * away_def_2023)
+    away_adj_2023 <- (away_lambda_2023 * home_def_2023) - hfa_adj_2023
+    #pts_per_kick
+    df_pts_2023 <- new_week_2023 %>% .[k:k,] %>% 
+      select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
+    pts_rf_2023 <- predict(rf_gridsearch_pts, newdata = df_pts_2023)
+    pts_xboost_2023 <- predict(gbm_model_pts, newdata = df_pts_2023)
+    pts_gbm_2023 <- predict(xboost_model_pts, newdata = df_pts_2023)
+    lm_df_2023 <- data.frame(pts_rf_2023, pts_xboost_2023, pts_gbm_2023)
+    colnames(lm_df_2023) <- c('preds_rf', 'preds_gbm', 'preds_xboost')
+    pts_per_kick_2023 <- predict(ensemble_model, lm_df_2023)
+    
+    #simulate 100,000 games with home_adj and away_adj as lambdas
+    biv_pois_2023 <- as.data.frame(rbvpois(100000, home_adj_2023, away_adj_2023[1,1],0) * pts_per_kick_2023)
+    colnames(biv_pois_2023) <- c('home', 'away')
+    home_mean_2023 <- mean(biv_pois_2023$home)
+    away_mean_2023 <- mean(biv_pois_2023$away)
+    total_2023 <- biv_pois_2023$home + biv_pois_2023$away
+    total_quant_2023 <- c(mean(total), quantile(total, probs = c(0.32,0.68)))
+    output_2023 <- c(new_week_2023$Date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023,2))
+    final_df_2023 <- rbind(final_df_2023, output_2023)
+    colnames(final_df_2023) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
+    
+  }
+  
+  #attach betting odds to final_df
+  final_df_2023$date <- as.Date(final_df_2023$date)
+  final_df_2023 <- left_join(final_df_2023, afl_historical_odds_join, by = (c('date', 'home_team', 'away_team')))
+  final_df_2023 <- data.frame(final_df_2023)
+  #update lambdas / pts per shot / defense
+  updated_stats_week_2023 <- updated_stats_2023 %>% filter(match_round == n)
+  stats_grouped_update_2023 <- stats_create_2021(updated_stats_week_2023)
+  
+  #update defense stats
+  defense_grouped_update_2023 <- defense_func(updated_stats_week_2023)
+  def_weeks_update_2023 <- defensive_correction(defense_grouped_update_2023, updated_stats_week_2023)
+  colnames(def_weeks_update_2023) <- c('player_team', paste0('mean_game_shots_',n), paste0('league_mean_',n), paste0('def_diff_',n), paste0('def_pct_',n))
+  combined_defense_2023 <- left_join(combined_defense_2023, def_weeks_update_2023, by = 'player_team')
+  mean_weeks_update_2023 <- combined_defense_2023 %>% select(c('player_team', matches('mean_game_'))) 
+  mean_weeks_update_2023 <- mean_weeks_update_2023 %>%
+    mutate(data_sum = rowSums(across(where(is.numeric)), na.rm = TRUE) - mean_game_shots_0,
+           update_alpha = (mean_game_shots_0 * 2) + data_sum,
+           update_beta = 2 + n,
+           update_lambda = update_alpha / update_beta)
+  mean_league_update_2023 <- combined_defense_2023 %>% select(c('player_team', matches('league_mean_'))) %>%
+    mutate(data_sum = rowSums(across(where(is.numeric)), na.rm=TRUE) - league_mean_0,
+           update_alpha = (league_mean_0 * 2) + data_sum,
+           update_beta = 2 + n,
+           update_lambda = update_alpha / update_beta)
+  def_corr_update_2023 <- data.frame(mean_league_update_2023$player_team)
+  colnames(def_corr_update_2023) <- 'player_team'
+  def_corr_update_2023$league_mean <- lookup(def_corr_update_2023$player_team, mean_league_update_2023$player_team, mean_league_update_2023$update_lambda)
+  def_corr_update_2023$mean_game_shots <- lookup(def_corr_update_2023$player_team, mean_weeks_update_2023$player_team, mean_weeks_update_2023$update_lambda)
+  def_corr_update_2023 <- def_corr_update_2023 %>%
+    mutate(def_diff = mean_game_shots - league_mean,
+           def_pct = mean_game_shots / league_mean)
+  
+  #update lambda
+  update_lambda_rf_2023 <- predict(rf_gridsearch, newdata = stats_grouped_update_2023[,-c(1:3)])
+  update_lambda_gbm_2023 <- predict(gbm_model, newdata = stats_grouped_update_2023[,-c(1:3)])
+  update_lambda_xboost_2023 <- predict(xboost_model, newdata = stats_grouped_update_2023[,-c(1:3)])
+  #create ensemble        
+  update_ensemble_df_2023 <- data.frame(cbind(update_lambda_rf_2023, update_lambda_xboost_2023, update_lambda_gbm_2023))
+  colnames(update_ensemble_df_2023) <- c('preds_rf', 'preds_gbm', 'preds_xboost')
+  update_ensemble_preds_2023 <- predict(ensemble_model, newdata = update_ensemble_df_2023)
+  #update preds df
+  update_lambda_df_2023 <- data.frame(cbind(stats_grouped_update_2023$player_team, as.numeric(round(update_ensemble_preds_2023,2))))
+  colnames(update_lambda_df_2023) <- c('player_team', paste0('week_', n))
+  
+  #posterior lambdas
+  update_df_final_2023 <- left_join(update_df_final_2023, update_lambda_df_2023, by = 'player_team')
+  update_df_final_2023[,c(2:(n+1))] <- as.numeric(unlist(update_df_final_2023[,c(2:(n+1))])) 
+  update_df_final_2023 <- update_df_final_2023 %>% 
+    mutate(data_sum = rowSums(across(where(is.numeric)), na.rm=TRUE))
+  update_df_final_2023 <- left_join(update_df_final_2023, lambda_loop_2023, by = 'player_team')
+  #create new alpha/beta
+  update_df_final_2023 <- update_df_final_2023 %>%
+    mutate(alpha_update = alpha + data_sum,
+           beta_update = beta + n,
+           mean_shots_update = alpha_update / beta_update)
+  #update dfs for next run through
+  lambda_loop_2023 <- lambda_loop_2023 %>% select(c(player_team))
+  lambda_loop_2023$mean_shots <- lookup(lambda_loop_2023$player_team, update_df_final_2023$player_team, update_df_final_2023$mean_shots_update)
+  lambda_loop_2023$alpha <- lookup(lambda_loop_2023$player_team, update_df_final_2023$player_team, update_df_final_2023$alpha_update)
+  lambda_loop_2023$beta <- lookup(lambda_loop_2023$player_team, update_df_final_2023$player_team, update_df_final_2023$beta_update)
+  #update_df_final
+  update_df_final_2023 <- update_df_final_2023 %>% select(c(1:(n+1)))
+  #bind final_df to output
+  output_df_2023 <- as.data.frame(rbind(as.matrix(output_df_2023), final_df_2023))
+  #add to n
+  print(n)
+  n <- n+1
+}
+
+################################################################################################################
+#test vs markets to see performance
+################################################################################################################
+#totals
+output_df_2023 <- output_df_2023 %>% select(-c(Kick.Off..local., Venue))
+output_df_2023 <- output_df_2023 %>% select(-c(12:27))
+output_df_2023 <- output_df_2023 %>% mutate_at(c(4:40), as.numeric)
+output_df_2023$over_bet <- ifelse(output_df_2023$total_high_quantile < output_df_2023$Total.Score.Open, 'under','no bet')
+output_df_2023$over_bet <- ifelse(output_df_2023$total_low_quantile > output_df_2023$Total.Score.Open, 'over',output_df$over_bet_2023)
+output_df_2023$over_act <- ifelse((as.numeric(output_df_2023$Home.Score) + as.numeric(output_df_2023$Away.Score)) > output_df_2023$Total.Score.Open, 'over', 'under')
+output_df_2023$over_outcome <- ifelse(output_df_2023$over_bet == output_df_2023$over_act,'win','loss')
+output_df_2023$over_outcome <- ifelse(output_df_2023$over_bet == 'no bet', 'no bet', output_df_2023$over_outcome)
+table(output_df_2023$over_outcome)
+
+#sides
+output_df_2023$side_bet <- ifelse(output_df_2023$side > 0 & output_df_2023$Home.Line.Open < 0 & output_df_2023$side > abs(output_df_2023$Home.Line.Open),'home','away')
+output_df_2023$side_bet <- ifelse(output_df_2023$side > 0 & output_df_2023$Home.Line.Open >= 0, 'home', output_df_2023$side_bet)
+output_df_2023$side_bet <- ifelse(output_df_2023$side < 0 & output_df_2023$Home.Line.Open < 0,  'away', output_df_2023$side_bet)
+output_df_2023$side_bet <- ifelse(output_df_2023$side < 0 & output_df_2023$Home.Line.Open > 0 & abs(output_df_2023$side) < output_df_2023$Home.Line.Open, 'away', output_df_2023$side_bet)
+output_df_2023$side_act <- ifelse(output_df_2023$Home.Line.Open <= 0 & (output_df_2023$Home.Score - output_df_2023$Away.Score) > abs(output_df_2023$Home.Line.Open), 'home', 'away')
+output_df_2023$side_act <- ifelse(output_df_2023$Home.Line.Open > 0 & (output_df_2023$Away.Score - output_df_2023$Home.Score) > output_df_2023$Home.Line.Open, 'away', output_df_2023$side_act)
+output_df_2023$side_outcome <- ifelse(output_df_2023$side_act == output_df_2023$side_bet, 'win', 'loss')
+table(output_df_2023$side_outcome)
+
