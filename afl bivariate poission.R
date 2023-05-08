@@ -983,6 +983,7 @@ while(n < 24){
     }
   
   #attach betting odds to final_df
+  final_df$date <- as.Date(final_df$date)
   final_df <- left_join(final_df, afl_historical_odds_join, by = (c('date', 'home_team', 'away_team')))
   final_df <- data.frame(final_df)
   #update lambdas / pts per shot / defense
@@ -1055,7 +1056,7 @@ while(n < 24){
 ################################################################################################################
 #totals
 output_df <- output_df %>% mutate_at(c(4:56), as.numeric)
-output_df <- output_df %>% select(-c(Kick.Off, Venue))
+output_df <- output_df %>% select(-c(Kick.Off..local., Venue))
 output_df <- output_df %>% select(-c(12:15))
 output_df <- output_df %>% select(-c(14:22))
 output_df <- output_df %>% select(-c(34:41))
@@ -1081,51 +1082,55 @@ table(output_df$side_outcome)
 #2023 season
 #######################################################################################################################
 #pull schedule for 2023
-sched_2023 <- fetch_fixture(season = 2023) %>% 
+sched_2023_all <- fetch_fixture(season = 2023) %>% 
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber < 24)
-sched_2023$Hour <- as.integer(sched_2023$Hour)
+  select(-c('Second'))
 
 #align home team names
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'Geelong Cats', 'Geelong', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'Adelaide Crows', 'Adelaide', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'West Coast Eagles', 'West Coast', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'Sydney Swans', 'Sydney', sched_2023$home.team.name)
-sched_2023$home.team.name <- ifelse(sched_2023$home.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Geelong Cats', 'Geelong', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Adelaide Crows', 'Adelaide', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'West Coast Eagles', 'West Coast', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Sydney Swans', 'Sydney', sched_2023_all$home.team.name)
+sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023_all$home.team.name)
 #align away team names 
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'Geelong Cats', 'Geelong', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'Adelaide Crows', 'Adelaide', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'West Coast Eagles', 'West Coast', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'Sydney Swans', 'Sydney', sched_2023$away.team.name)
-sched_2023$away.team.name <- ifelse(sched_2023$away.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Geelong Cats', 'Geelong', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Adelaide Crows', 'Adelaide', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'West Coast Eagles', 'West Coast', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Sydney Swans', 'Sydney', sched_2023_all$away.team.name)
+sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023_all$away.team.name)
 
 #add match_id
 match_id_2023 <- fetch_player_stats_fryzigg(season = 2023)
 colnames(match_id_2023)[3:5] <- c('home.team.name', 'away.team.name', 'Date')
 match_id_2023 <- match_id_2023 %>% select(match_id, home.team.name, away.team.name, Date) %>% unique()
 #attach match_id to sched_2023
-sched_2023 <- left_join(match_id_2023, sched_2023, by = c('Date', 'home.team.name', 'away.team.name'))
+sched_2023_all <- left_join(match_id_2023, sched_2023_all, by = c('Date', 'home.team.name', 'away.team.name'))
 
 #pull home ground data
-sched_2023$home_ground <- lookup(sched_2023$home.team.name, home_ground$team, home_ground$home_ground)
+sched_2023_all$home_ground <- lookup(sched_2023_all$home.team.name, home_ground$team, home_ground$home_ground)
 #pull away ground data to add travel
-sched_2023$away_ground <- lookup(sched_2023$away.team.name, home_ground$team, home_ground$home_ground)
+sched_2023_all$away_ground <- lookup(sched_2023_all$away.team.name, home_ground$team, home_ground$home_ground)
 #pull home city and lat / long
-sched_2023$home_city <- lookup(sched_2023$home.team.name, home_ground$team, home_ground$city)
-sched_2023$home_city <- ifelse(sched_2023$home_city == 'New South Wales^', 'New South Wales', sched_2022$home_city)
-sched_2023$home_lat <- lookup(sched_2023$home_city, aus_cities$City, aus_cities$Lat)
-sched_2023$home_lon <- lookup(sched_2023$home_city, aus_cities$City, aus_cities$Long)
+sched_2023_all$home_city <- lookup(sched_2023_all$home.team.name, home_ground$team, home_ground$city)
+sched_2023_all$home_city <- ifelse(sched_2023_all$home_city == 'New South Wales^', 'New South Wales', sched_2023_all$home_city)
+sched_2023_all$home_lat <- lookup(sched_2023_all$home_city, aus_cities$City, aus_cities$Lat)
+sched_2023_all$home_lon <- lookup(sched_2023_all$home_city, aus_cities$City, aus_cities$Long)
 #pull away city and lat / long
-sched_2023$away_city <- lookup(sched_2023$away.team.name, home_ground$team, home_ground$city)
-sched_2023$away_city <- ifelse(sched_2023$away_city == 'New South Wales^', 'New South Wales', sched_2022$away_city)
-sched_2023$away_lat <- lookup(sched_2023$away_city, aus_cities$City, aus_cities$Lat)
-sched_2023$away_lon <- lookup(sched_2023$away_city, aus_cities$City, aus_cities$Long)
+sched_2023_all$away_city <- lookup(sched_2023_all$away.team.name, home_ground$team, home_ground$city)
+sched_2023_all$away_city <- ifelse(sched_2023_all$away_city == 'New South Wales^', 'New South Wales', sched_2023_all$away_city)
+sched_2023_all$away_lat <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Lat)
+sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Long)
+
+#filter games from 2023 that have already happened
+sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 8)
+sched_2023$Hour <- as.integer(sched_2023$Hour)
+
 
 #pull weather data 2023 
 ##############################################################################################################
@@ -1209,7 +1214,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 7){
+while(n < 8){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1244,7 +1249,7 @@ while(n < 7){
     home_mean_2023 <- mean(biv_pois_2023$home)
     away_mean_2023 <- mean(biv_pois_2023$away)
     total_2023 <- biv_pois_2023$home + biv_pois_2023$away
-    total_quant_2023 <- c(mean(total), quantile(total, probs = c(0.32,0.68)))
+    total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.32,0.68)))
     output_2023 <- c(new_week_2023$Date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023,2))
     final_df_2023 <- rbind(final_df_2023, output_2023)
     colnames(final_df_2023) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
@@ -1328,7 +1333,7 @@ output_df_2023 <- output_df_2023 %>% select(-c(Kick.Off..local., Venue))
 output_df_2023 <- output_df_2023 %>% select(-c(12:27))
 output_df_2023 <- output_df_2023 %>% mutate_at(c(4:40), as.numeric)
 output_df_2023$over_bet <- ifelse(output_df_2023$total_high_quantile < output_df_2023$Total.Score.Open, 'under','no bet')
-output_df_2023$over_bet <- ifelse(output_df_2023$total_low_quantile > output_df_2023$Total.Score.Open, 'over',output_df$over_bet_2023)
+output_df_2023$over_bet <- ifelse(output_df_2023$total_low_quantile > output_df_2023$Total.Score.Open, 'over',output_df_2023$over_bet)
 output_df_2023$over_act <- ifelse((as.numeric(output_df_2023$Home.Score) + as.numeric(output_df_2023$Away.Score)) > output_df_2023$Total.Score.Open, 'over', 'under')
 output_df_2023$over_outcome <- ifelse(output_df_2023$over_bet == output_df_2023$over_act,'win','loss')
 output_df_2023$over_outcome <- ifelse(output_df_2023$over_bet == 'no bet', 'no bet', output_df_2023$over_outcome)
@@ -1344,3 +1349,44 @@ output_df_2023$side_act <- ifelse(output_df_2023$Home.Line.Open > 0 & (output_df
 output_df_2023$side_outcome <- ifelse(output_df_2023$side_act == output_df_2023$side_bet, 'win', 'loss')
 table(output_df_2023$side_outcome)
 
+################################################################################################################
+#predictions for new week
+################################################################################################################
+#pull schedule for 2023
+current_week <- fetch_fixture(season = 2023) %>% 
+  select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
+  separate(utcStartTime, c('Date', 'Time'), 'T') %>%
+  separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
+  select(-c('Second')) %>% filter(round.roundNumber == 9)
+
+#align home team names
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'Geelong Cats', 'Geelong', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'Adelaide Crows', 'Adelaide', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'West Coast Eagles', 'West Coast', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'Sydney Swans', 'Sydney', current_week$home.team.name)
+current_week$home.team.name <- ifelse(current_week$home.team.name == 'Gold Coast Suns', 'Gold Coast', current_week$home.team.name)
+#align away team names 
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'Geelong Cats', 'Geelong', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'Adelaide Crows', 'Adelaide', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'West Coast Eagles', 'West Coast', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'Sydney Swans', 'Sydney', current_week$away.team.name)
+current_week$away.team.name <- ifelse(current_week$away.team.name == 'Gold Coast Suns', 'Gold Coast', current_week$away.team.name)
+
+#pull home ground data
+current_week$home_ground <- lookup(current_week$home.team.name, home_ground$team, home_ground$home_ground)
+#pull away ground data to add travel
+current_week$away_ground <- lookup(current_week$away.team.name, home_ground$team, home_ground$home_ground)
+#pull home city and lat / long
+current_week$home_city <- lookup(current_week$home.team.name, home_ground$team, home_ground$city)
+current_week$home_city <- ifelse(current_week$home_city == 'New South Wales^', 'New South Wales', current_week$home_city)
+current_week$home_lat <- lookup(current_week$home_city, aus_cities$City, aus_cities$Lat)
+current_week$home_lon <- lookup(current_week$home_city, aus_cities$City, aus_cities$Long)
+#pull away city and lat / long
+current_week$away_city <- lookup(current_week$away.team.name, home_ground$team, home_ground$city)
+current_week$away_city <- ifelse(current_week$away_city == 'New South Wales^', 'New South Wales', current_week$away_city)
+current_week$away_lat <- lookup(current_week$away_city, aus_cities$City, aus_cities$Lat)
+current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cities$Long)
