@@ -19,7 +19,7 @@ library(lubridate)
 #################################################################################################################
 theODDS_base <- 'https://api.the-odds-api.com/v4/sports/'
 theODDS_sport  <- 'aussierules_afl/'
-theODDS_key <- 'odds-history?apiKey=0a7476c0c60b98dc9ac1655f8a1a6c18&'
+theODDS_key <- 'odds-history?apiKeyxxxx'
 theODDS_region <- 'regions=au'
 theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
 start_date <- as.Date('2023-05-04') 
