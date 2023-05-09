@@ -863,7 +863,7 @@ sched_2022$away_lon <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$
 ##############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
-API_KEY <- '?key=GE5SPM4SQF4UBGD63ZGEMU4KJ'
+API_KEY <- '?key=XXXX'
 
 weather_function <- function(df, base, key){
   out <- data.frame()
@@ -1138,7 +1138,7 @@ sched_2023$Hour <- as.integer(sched_2023$Hour)
 ##############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
-API_KEY <- '?key=GE5SPM4SQF4UBGD63ZGEMU4KJ'
+API_KEY <- '?key=XXXXX'
 
 weather_function <- function(df, base, key){
   out <- data.frame()
