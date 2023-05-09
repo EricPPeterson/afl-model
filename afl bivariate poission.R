@@ -618,7 +618,7 @@ pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time
 #############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
-API_KEY <- '?key=GE5SPM4SQF4UBGD63ZGEMU4KJ'
+API_KEY <- '?key=xxxxxx'
 
 weather_function <- function(df, base, key){
   out <- data.frame()
