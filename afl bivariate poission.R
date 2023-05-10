@@ -26,7 +26,6 @@ theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
 start_date <- as.Date('2023-05-04') 
 theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
 
-
 #pull API data
 start_date <- as.Date('2022-03-10')
 odds_df <- data.frame()
