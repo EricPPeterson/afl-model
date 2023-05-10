@@ -20,7 +20,11 @@ library(jsonlite)
 #################################################################################################################
 theODDS_base <- 'https://api.the-odds-api.com/v4/sports/'
 theODDS_sport  <- 'aussierules_afl/'
+<<<<<<< HEAD
 theODDS_key <- Sys.getenv('theODDS_key')
+=======
+theODDS_key <- 'odds-history?apiKeyxxxx'
+>>>>>>> 03794dc5f8b9ba5f370977ba43cc86bf7d0163b3
 theODDS_region <- 'regions=au'
 theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
 start_date <- as.Date('2023-05-04') 
@@ -621,7 +625,11 @@ pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time
 #############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
+<<<<<<< HEAD
 API_KEY <- Sys.getenv('API_KEY')
+=======
+API_KEY <- '?key=xxxxxx'
+>>>>>>> 03794dc5f8b9ba5f370977ba43cc86bf7d0163b3
 
 weather_function <- function(df, base, key){
   out <- data.frame()
@@ -866,6 +874,10 @@ sched_2022$away_lon <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$
 ##############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
+<<<<<<< HEAD
+=======
+API_KEY <- '?key=XXXX'
+>>>>>>> 03794dc5f8b9ba5f370977ba43cc86bf7d0163b3
 
 weather_function <- function(df, base, key){
   out <- data.frame()
@@ -1139,6 +1151,10 @@ sched_2023$Hour <- as.integer(sched_2023$Hour)
 ##############################################################################################################
 library(jsonlite)
 weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
+<<<<<<< HEAD
+=======
+API_KEY <- '?key=XXXXX'
+>>>>>>> 03794dc5f8b9ba5f370977ba43cc86bf7d0163b3
 
 weather_function <- function(df, base, key){
   out <- data.frame()
