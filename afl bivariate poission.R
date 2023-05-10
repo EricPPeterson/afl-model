@@ -665,12 +665,14 @@ pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('match_id', 'hour
 #attach weather to points per kick df
 ##############################################################################################################
 pts_per_shot <- read.csv("~/GitHub/afl model/pts_per_shot.csv")
-pts_per_shot$winddir <- ifelse(pts_per_shot$home_ground == 'Docklands Stadium' & pts_per_shot$precip > 0,0,pts_per_shot$winddir)
-pts_per_shot$windspeed <- ifelse(pts_per_shot$home_ground == 'Docklands Stadium' & pts_per_shot$precip > 0,0,pts_per_shot$winddir)
-pts_per_shot$precip <- ifelse(pts_per_shot$home_ground == 'Docklands Stadium' & pts_per_shot$precip > 0,0, pts_per_shot$precip)
-pts_per_shot$precipprob <- ifelse(pts_per_shot$home_ground == 'Docklands Stadium' & pts_per_shot$precipprob > 0,0, pts_per_shot$precip)
-
-setwd("/Users/ericp/OneDrive/Documents/GitHub/afl-model")
+docklands <- function(df){
+  df$winddir <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
+  df$windspeed <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
+  df$precip <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$precip)
+  df$precipprob <- ifelse(df$home_ground == 'Docklands Stadium' & df$precipprob > 0,0, df$precip)
+  return(df)
+}
+pts_per_shot <- docklands(pts_per_shot)
 write.csv(pts_per_shot, 'pts_per_shot.csv', row.names = FALSE)
 
 ############################################################################################################
@@ -899,6 +901,7 @@ weather_function <- function(df, base, key){
 
 
 weather_output_2022 <- weather_function(sched_2022, weather_api_base, API_KEY)
+weather_output_2022 <- docklands(weather_output_2022)
 colnames(weather_output_2022)[1:2] <- c('match_id', 'Hour')
 
 write.csv(weather_output_2022, 'weather_output_2022.csv', row.names = FALSE)
