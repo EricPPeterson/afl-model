@@ -15,6 +15,7 @@ library(xgboost)
 library(gbm)
 library(lubridate)
 library(jsonlite)
+library(tidyr)
 #################################################################################################################
 #Odds API
 #################################################################################################################
@@ -78,13 +79,14 @@ for(i in 1:nrow(odds_df)){
   output_odds <- rbind(output_odds, teams)
 }
 
+colnames(odds_df)[1] <- 'date'
 write.csv(output_odds, 'odds_df.csv', row.names = FALSE)
-
+odds_df <- read.csv("~/GitHub/afl-model/odds_df.csv")
 
 ##########################################################################################################
 #fetch historical odds to backtest
 ##########################################################################################################
-afl_historical_odds <- read.csv("~/GitHub/afl model/afl_historical_odds.csv")
+afl_historical_odds <- read.csv("~/GitHub/afl-model/afl_historical_odds.csv")
 colnames(afl_historical_odds) <- unlist(afl_historical_odds[1, ])
 afl_historical_odds <- tail(afl_historical_odds, -1)
 afl_historical_odds$Date <- as.Date(dmy(afl_historical_odds$Date))
@@ -99,6 +101,7 @@ colnames(afl_historical_odds_join)[3] <- 'home_team'
 colnames(afl_historical_odds_join)[4] <- 'away_team'
 colnames(afl_historical_odds)[3] <- 'home_team'
 colnames(afl_historical_odds)[4] <- 'away_team'
+
 #change team names where required
 afl_historical_odds_join$home_team <- ifelse(afl_historical_odds_join$home_team == 'GWS Giants', 'Greater Western Sydney', afl_historical_odds_join$home_team)
 afl_historical_odds_join$home_team <- ifelse(afl_historical_odds_join$home_team == 'Brisbane', 'Brisbane Lions', afl_historical_odds_join$home_team)
@@ -624,15 +627,15 @@ API_KEY <- Sys.getenv('API_KEY')
 
 weather_function <- function(df, base, key){
   out <- data.frame()
-  df2 <- df %>% select(c(city, lat,long, date, start_time))
+  df2 <- df %>% select(c(city, lat, long, date, hour))
   df2 <- df2 %>% distinct()
   for(i in 1:nrow(df2)){
     #create city to locate using lat/lon
     city <- paste0(df2[i,3],',',df2[i,2],'/')
     #create date to pull from df
-    api_date <- paste0(df2[i,4])
+    api_date <- df2[i,4]
     #create time from df
-    api_time <- paste0('T',df2[i,5])
+    api_time <- paste0('T',df2[i,5],':00:00')
     #make full api link
     full_api <- paste0(base,city,api_date,api_time,key)
     #turn JSON into list
@@ -645,21 +648,21 @@ weather_function <- function(df, base, key){
     x_hour <- x_hour %>% separate(datetime,c('hour', 'minute', 'second'), sep = ':') %>% select(-c(minute, second))
     
     final_weather <- x_hour %>% select(c(hour, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
-    final_weather <- cbind(df$match_id[i],final_weather)
+    final_weather <- cbind(df2$date[i], df2$lat[i], df2$long[i], final_weather)
     out <- rbind(out,final_weather)
     print(i)
   }
   
   return(out)
 }
-  
+
 ##############################################################################################################
 #create weather df
 ##############################################################################################################
 weather_output <- weather_function(pts_per_shot, weather_api_base, API_KEY)
-colnames(weather_output)[1] <-'match_id'
-pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('match_id', 'hour')) %>%
-  select(-c(total_shots, total_points, home_team, city, lat, long, date, start_time, hour))
+colnames(weather_output)[1:4] <- c('date','lat', 'long','hour')
+pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
+  select(-c(total_shots, total_points, home_team, city, lat, long, date, start_time, hour)) %>% distinct()
 
 ##############################################################################################################
 #attach weather to points per kick df
@@ -823,21 +826,27 @@ sched_2022 <- fetch_fixture(season = 2022) %>%
 sched_2022$Hour <- as.integer(sched_2022$Hour)
 
 #align home team names
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'Geelong Cats', 'Geelong', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'Adelaide Crows', 'Adelaide', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'West Coast Eagles', 'West Coast', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'Sydney Swans', 'Sydney', sched_2022$home.team.name)
-sched_2022$home.team.name <- ifelse(sched_2022$home.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2022$home.team.name)
-#align away team names 
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'Geelong Cats', 'Geelong', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'Adelaide Crows', 'Adelaide', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'West Coast Eagles', 'West Coast', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'Sydney Swans', 'Sydney', sched_2022$away.team.name)
-sched_2022$away.team.name <- ifelse(sched_2022$away.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2022$away.team.name)
+sched_team <- function(df){
+  df$home.team.name <- ifelse(df$home.team.name == 'Geelong Cats', 'Geelong', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'GWS Giants', 'Greater Western Sydney', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'Adelaide Crows', 'Adelaide', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'GWS Giants', 'Greater Western Sydney', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'West Coast Eagles', 'West Coast', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'Sydney Swans', 'Sydney', df$home.team.name)
+  df$home.team.name <- ifelse(df$home.team.name == 'Gold Coast Suns', 'Gold Coast', df$home.team.name)
+  #align away team names 
+  df$away.team.name <- ifelse(df$away.team.name == 'Geelong Cats', 'Geelong', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'GWS Giants', 'Greater Western Sydney', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'Adelaide Crows', 'Adelaide', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'GWS Giants', 'Greater Western Sydney', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'West Coast Eagles', 'West Coast', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'Sydney Swans', 'Sydney', df$away.team.name)
+  df$away.team.name <- ifelse(df$away.team.name == 'Gold Coast Suns', 'Gold Coast', df$away.team.name)
+  
+  return(df)  
+}
+
+sched_2022 <- sched_team(sched_2022)
 
 #add match_id
 match_id_2022 <- fetch_player_stats_fryzigg(season = 2022)
@@ -860,58 +869,31 @@ sched_2022$away_city <- lookup(sched_2022$away.team.name, home_ground$team, home
 sched_2022$away_city <- ifelse(sched_2022$away_city == 'New South Wales^', 'New South Wales', sched_2022$away_city)
 sched_2022$away_lat <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$Lat)
 sched_2022$away_lon <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$Long)
+#separate out hour
+time_separated_2022 <- sched_2022 %>% 
+  separate(start_time,c('hour', 'minute', 'second'), sep = ':') %>% 
+  select(-c(minute, second))
+pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time_separated$hour)
+
+
 
 #pull weather data
 ##############################################################################################################
 #create weather df
 ##############################################################################################################
-library(jsonlite)
-weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
-
-weather_function <- function(df, base, key){
-  out <- data.frame()
-  df2 <- df %>% select(c(home_city, home_lat, home_lon, Date, Hour))
-  df2 <- df2 %>% distinct()
-  for(i in 1:nrow(df2)){
-    #create city to locate using lat/lon
-    city <- paste0(df2[i,3],',',df2[i,2],'/')
-    #create date to pull from df
-    api_date <- paste0(df2[i,4])
-    #create time from df
-    api_time <- paste0('T',df2[i,5],':00:00')
-    #make full api link
-    full_api <- paste0(base,city,api_date,api_time,key)
-    #turn JSON into list
-    weather_data <- fromJSON(full_api)
-    #turn list into dataframe
-    x <- data.frame(weather_data$days)
-    #pull hour by hour by hour data out of last column (last column is in itself a list)
-    x_hour <- x$hours[[1]]
-    #pull out hours
-    x_hour <- x_hour %>% separate(datetime,c('hour', 'minute', 'second'), sep = ':') %>% select(-c(minute, second))
-    
-    final_weather <- x_hour %>% select(c(hour, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
-    final_weather <- cbind(df$match_id[i],final_weather)
-    out <- rbind(out,final_weather)
-    print(i)
-  }
-  
-  return(out)
-}
-
-
+colnames(sched_2022)[c(2:3,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
 weather_output_2022 <- weather_function(sched_2022, weather_api_base, API_KEY)
-weather_output_2022 <- docklands(weather_output_2022)
-colnames(weather_output_2022)[1:2] <- c('match_id', 'Hour')
-
+colnames(weather_output_2022)[1:4] <- c('date', 'lat', 'long', 'hour')
+weather_output_2022$hour <- as.integer(weather_output_2022$hour)
 write.csv(weather_output_2022, 'weather_output_2022.csv', row.names = FALSE)
 
 ##############################################################################################################
 #attach weather to points per kick df
 ##############################################################################################################
 weather_output_2022 <- read.csv("~/GitHub/afl model/weather_output_2022.csv")
-colnames(weather_output_2022)[1:2] <- c('match_id', 'Hour')
-sched_2022_weather <- left_join(sched_2022, weather_output_2022, by = c('match_id', 'Hour'))
+sched_2022_weather <- left_join(sched_2022, weather_output_2022, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
+  distinct()
+weather_output_2022 <- docklands(sched_2022_weather)
 
 ##############################################################################################################
 #add travel column and add distance traveled by away team
@@ -919,7 +901,7 @@ sched_2022_weather <- left_join(sched_2022, weather_output_2022, by = c('match_i
 #calc travel distance for awa#away travel
 sched_2022_weather$travel <- NA
 for(i in 1:nrow(sched_2022_weather)){
-  sched_2022_weather$travel[i] <- distm(c(sched_2022_weather$home_lat[i],sched_2022_weather$home_lon[i]),c(sched_2022_weather$away_lat[i], sched_2022_weather$away_lon[i]),
+  sched_2022_weather$travel[i] <- distm(c(sched_2022_weather$lat[i],sched_2022_weather$long[i]),c(sched_2022_weather$away_lat[i], sched_2022_weather$away_lon[i]),
                                 fun = distHaversine)/1000
   print(i)
 }
@@ -979,7 +961,7 @@ while(n < 23){
     away_mean <- mean(biv_pois$away)
     total <- biv_pois$home + biv_pois$away
     total_quant <- c(mean(total), quantile(total, probs = c(0.32,0.68)))
-    output <- c(new_week$Date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
+    output <- c(new_week$date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
     colnames(final_df) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
     
@@ -1058,11 +1040,8 @@ while(n < 23){
 #test vs markets to see performance
 ################################################################################################################
 #totals
-output_df <- output_df %>% mutate_at(c(4:56), as.numeric)
 output_df <- output_df %>% select(-c(Kick.Off..local., Venue))
-output_df <- output_df %>% select(-c(12:15))
-output_df <- output_df %>% select(-c(14:22))
-output_df <- output_df %>% select(-c(34:41))
+output_df <- output_df %>% mutate_at(c(4:56), as.numeric)
 output_df$over_bet <- ifelse(output_df$total_high_quantile < output_df$Total.Score.Open, 'under','no bet')
 output_df$over_bet <- ifelse(output_df$total_low_quantile > output_df$Total.Score.Open, 'over',output_df$over_bet)
 output_df$over_act <- ifelse((as.numeric(output_df$Home.Score) + as.numeric(output_df$Away.Score)) > output_df$Total.Score.Open, 'over', 'under')
@@ -1092,21 +1071,7 @@ sched_2023_all <- fetch_fixture(season = 2023) %>%
   select(-c('Second'))
 
 #align home team names
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Geelong Cats', 'Geelong', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Adelaide Crows', 'Adelaide', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'West Coast Eagles', 'West Coast', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Sydney Swans', 'Sydney', sched_2023_all$home.team.name)
-sched_2023_all$home.team.name <- ifelse(sched_2023_all$home.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023_all$home.team.name)
-#align away team names 
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Geelong Cats', 'Geelong', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Adelaide Crows', 'Adelaide', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'GWS Giants', 'Greater Western Sydney', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'West Coast Eagles', 'West Coast', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Sydney Swans', 'Sydney', sched_2023_all$away.team.name)
-sched_2023_all$away.team.name <- ifelse(sched_2023_all$away.team.name == 'Gold Coast Suns', 'Gold Coast', sched_2023_all$away.team.name)
+sched_2023_all <- sched_team(sched_2023_all)
 
 #add match_id
 match_id_2023 <- fetch_player_stats_fryzigg(season = 2023)
@@ -1132,59 +1097,28 @@ sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus
 
 #filter games from 2023 that have already happened
 sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 8)
+sched_2023$Date <- as.character(sched_2023$Date)
 sched_2023$Hour <- as.integer(sched_2023$Hour)
+colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
 
 
 #pull weather data 2023 
 ##############################################################################################################
 #create weather df 2023
 ##############################################################################################################
-library(jsonlite)
-weather_api_base <- 'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'
-
-weather_function <- function(df, base, key){
-  out <- data.frame()
-  df2 <- df %>% select(c(home_city, home_lat, home_lon, Date, Hour))
-  df2 <- df2 %>% distinct()
-  for(i in 1:nrow(df2)){
-    #create city to locate using lat/lon
-    city <- paste0(df2[i,3],',',df2[i,2],'/')
-    #create date to pull from df
-    api_date <- paste0(df2[i,4])
-    #create time from df
-    api_time <- paste0('T',df2[i,5],':00:00')
-    #make full api link
-    full_api <- paste0(base,city,api_date,api_time,key)
-    #turn JSON into list
-    weather_data <- fromJSON(full_api)
-    #turn list into dataframe
-    x <- data.frame(weather_data$days)
-    #pull hour by hour by hour data out of last column (last column is in itself a list)
-    x_hour <- x$hours[[1]]
-    #pull out hours
-    x_hour <- x_hour %>% separate(datetime,c('hour', 'minute', 'second'), sep = ':') %>% select(-c(minute, second))
-    
-    final_weather <- x_hour %>% select(c(hour, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
-    final_weather <- cbind(df$match_id[i],final_weather)
-    out <- rbind(out,final_weather)
-    print(i)
-  }
-  
-  return(out)
-}
-
 weather_output_2023 <- weather_function(sched_2023, weather_api_base, API_KEY)
-colnames(weather_output_2022)[1:2] <- c('match_id', 'Hour')
-
-setwd("/Users/ericp/OneDrive/Documents/GitHub/afl model")
+colnames(weather_output_2023)[1:4] <- c('date', 'lat', 'long','hour')
+weather_output_2023$date <- as.character(weather_output_2023$date)
+weather_output_2023$hour <- as.integer(weather_output_2023$hour)
 write.csv(weather_output_2023, 'weather_output_2023.csv', row.names = FALSE)
 
 ##############################################################################################################
 #attach weather to points per kick df 2023
 ##############################################################################################################
 weather_output_2023 <- read.csv("~/GitHub/afl model/weather_output_2023.csv")
-colnames(weather_output_2023)[1:2] <- c('match_id', 'Hour')
-sched_2023_weather <- left_join(sched_2023, weather_output_2023, by = c('match_id', 'Hour'))
+sched_2023_weather <- left_join(sched_2023, weather_output_2023, by = c('date', 'hour', 'lat', 'long')) %>%
+  distinct()
+sched_2023_weather <- docklands(sched_2023_weather)
 
 ##############################################################################################################
 #add travel column and add distance traveled by away team 2023
@@ -1192,7 +1126,7 @@ sched_2023_weather <- left_join(sched_2023, weather_output_2023, by = c('match_i
 #calc travel distance for awa#away travel
 sched_2023_weather$travel <- NA
 for(i in 1:nrow(sched_2023_weather)){
-  sched_2023_weather$travel[i] <- distm(c(sched_2023_weather$home_lat[i],sched_2023_weather$home_lon[i]),c(sched_2023_weather$away_lat[i], sched_2023_weather$away_lon[i]),
+  sched_2023_weather$travel[i] <- distm(c(sched_2023_weather$lat[i],sched_2023_weather$long[i]),c(sched_2023_weather$away_lat[i], sched_2023_weather$away_lon[i]),
                                         fun = distHaversine)/1000
   print(i)
 }
@@ -1210,18 +1144,19 @@ def_corr_update_2023 <- def_stats_2022
 updated_stats_2023 <- season_pull(2023,2023)
 output_df_2023 <- data.frame()
 defense_df_2023 <- data.frame()
+df_2023_final <- data.frame()
 combined_defense_2023 <- def_stats_2022
 colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
 
 #set initial n
 n = 1
 
-while(n < 8){
+while(n < 9){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
-  
-  for(k in 1:nrow(new_week)){
+
+  for(k in 1:nrow(new_week_2023)){
     #lookup mean shots for home and away team
     home_lambda_2023 <- lookup(new_week_2023$home.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
     away_lambda_2023 <- lookup(new_week_2023$away.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
@@ -1252,13 +1187,13 @@ while(n < 8){
     away_mean_2023 <- mean(biv_pois_2023$away)
     total_2023 <- biv_pois_2023$home + biv_pois_2023$away
     total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.32,0.68)))
-    output_2023 <- c(new_week_2023$Date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023,2))
+    output_2023 <- data.frame(new_week_2023$date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023[1],2), round(total_quant_2023[2],2), round(total_quant_2023[3],2))
     final_df_2023 <- rbind(final_df_2023, output_2023)
-    colnames(final_df_2023) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
     
   }
   
   #attach betting odds to final_df
+  colnames(final_df_2023) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
   final_df_2023$date <- as.Date(final_df_2023$date)
   final_df_2023 <- left_join(final_df_2023, afl_historical_odds_join, by = (c('date', 'home_team', 'away_team')))
   final_df_2023 <- data.frame(final_df_2023)
@@ -1322,7 +1257,7 @@ while(n < 8){
   update_df_final_2023 <- update_df_final_2023 %>% select(c(1:(n+1)))
   #bind final_df to output
   output_df_2023 <- as.data.frame(rbind(as.matrix(output_df_2023), final_df_2023))
-  #add to n
+  #output_df_2023 <- rbind(output_df_2023, final_df_2023)
   print(n)
   n <- n+1
 }
@@ -1331,9 +1266,8 @@ while(n < 8){
 #test vs markets to see performance
 ################################################################################################################
 #totals
-output_df_2023 <- output_df_2023 %>% select(-c(Kick.Off..local., Venue))
-output_df_2023 <- output_df_2023 %>% select(-c(12:27))
-output_df_2023 <- output_df_2023 %>% mutate_at(c(4:40), as.numeric)
+output_df_2023 <- output_df_2023 %>% select(-c(10,11,14))
+output_df_2023 <- output_df_2023 %>% mutate_at(c(4:55), as.numeric)
 output_df_2023$over_bet <- ifelse(output_df_2023$total_high_quantile < output_df_2023$Total.Score.Open, 'under','no bet')
 output_df_2023$over_bet <- ifelse(output_df_2023$total_low_quantile > output_df_2023$Total.Score.Open, 'over',output_df_2023$over_bet)
 output_df_2023$over_act <- ifelse((as.numeric(output_df_2023$Home.Score) + as.numeric(output_df_2023$Away.Score)) > output_df_2023$Total.Score.Open, 'over', 'under')
@@ -1359,24 +1293,10 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 9)
+  select(-c('Second')) %>% filter(round.roundNumber == 10)
 
 #align home team names
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'Geelong Cats', 'Geelong', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'Adelaide Crows', 'Adelaide', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'West Coast Eagles', 'West Coast', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'Sydney Swans', 'Sydney', current_week$home.team.name)
-current_week$home.team.name <- ifelse(current_week$home.team.name == 'Gold Coast Suns', 'Gold Coast', current_week$home.team.name)
-#align away team names 
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'Geelong Cats', 'Geelong', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'Adelaide Crows', 'Adelaide', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'GWS Giants', 'Greater Western Sydney', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'West Coast Eagles', 'West Coast', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'Sydney Swans', 'Sydney', current_week$away.team.name)
-current_week$away.team.name <- ifelse(current_week$away.team.name == 'Gold Coast Suns', 'Gold Coast', current_week$away.team.name)
+current_week <- sched_team(current_week)
 
 #pull home ground data
 current_week$home_ground <- lookup(current_week$home.team.name, home_ground$team, home_ground$home_ground)
@@ -1398,42 +1318,9 @@ current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cit
 ##############################################################################################################
 #create weather df 2023
 ##############################################################################################################
-weather_function_new <- function(df, base, key){
-  out <- data.frame()
-  df2 <- df %>% select(c(home_city, home_lat, home_lon, Date, Hour))
-  df2 <- df2 %>% distinct()
-  for(i in 1:nrow(df2)){
-    #create city to locate using lat/lon
-    city <- paste0(df2[i,3],',',df2[i,2],'/')
-    #create date to pull from df
-    api_date <- paste0(df2[i,4])
-    #create time from df
-    api_time <- paste0('T',df2[i,5],':00:00')
-    #make full api link
-    full_api <- paste0(base,city,api_date,api_time,key)
-    #turn JSON into list
-    weather_data <- fromJSON(full_api)
-    #turn list into dataframe
-    x <- data.frame(weather_data$days)
-    #pull hour by hour by hour data out of last column (last column is in itself a list)
-    x_hour <- x$hours[[1]]
-    #pull out hours
-    x_hour <- x_hour %>% separate(datetime,c('hour', 'minute', 'second'), sep = ':') %>% select(-c(minute, second))
-    
-    final_weather <- x_hour %>% select(c(hour, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
-    final_weather <- cbind(df2$Date[i], df2$home_lat[i], df2$home_lon[i], final_weather)
-    out <- rbind(out,final_weather)
-    print(i)
-  }
-  
-  return(out)
-}
-
-weather_output_new <- weather_function_new(current_week, weather_api_base, API_KEY)
-colnames(weather_output_new)[1:4] <- c('Date', 'home_lat', 'home_lon', 'Hour')
-
-setwd("/Users/ericp/OneDrive/Documents/GitHub/afl-model")
-write.csv(weather_output_2023, 'weather_output_new.csv', row.names = FALSE)
+colnames(current_week)[c(2,3,14:16)] <- c('date', 'hour', 'city','lat','long') 
+weather_output_new <- weather_function(current_week, weather_api_base, API_KEY)
+colnames(weather_output_new)[1:4] <- c('date', 'lat', 'long', 'hour')
 
 ##############################################################################################################
 #add travel column and add distance traveled by away team 2023
@@ -1441,7 +1328,7 @@ write.csv(weather_output_2023, 'weather_output_new.csv', row.names = FALSE)
 #calc travel distance for awa#away travel
 current_week$travel <- NA
 for(i in 1:nrow(current_week)){
-  current_week$travel[i] <- distm(c(current_week$home_lat[i],current_week$home_lon[i]),c(current_week$away_lat[i], current_week$away_lon[i]),
+  current_week$travel[i] <- distm(c(current_week$lat[i],current_week$long[i]),c(current_week$away_lat[i], current_week$away_lon[i]),
                                         fun = distHaversine)/1000
   print(i)
 }
@@ -1449,8 +1336,9 @@ for(i in 1:nrow(current_week)){
 ##############################################################################################################
 #new week predictions
 ##############################################################################################################
-current_week <- left_join(current_week, weather_output_new, by = c('Date', 'Hour', 'home_lat', 'home_lon')) %>%
+current_week <- left_join(current_week, weather_output_new, by = c('date', 'hour', 'lat', 'long')) %>%
   distinct()
+current_week <- docklands(current_week)
 final_df_new <- data.frame()
 
 for(k in 1:nrow(current_week)){
@@ -1465,8 +1353,8 @@ for(k in 1:nrow(current_week)){
   #HFA
   hfa_adj_new <- home_base[2] - travel_int  - (current_week$travel[k] * travel_coeff)
   #adjusted lambdas
-  home_adj_new <- (home_lambda_new * away_def_2023)
-  away_adj_new <- (away_lambda_new * home_def_2023) - hfa_adj_new
+  home_adj_new <- (home_lambda_new * away_def_new)
+  away_adj_new <- (away_lambda_new * home_def_new) - hfa_adj_new
   #pts_per_kick
   df_pts_new <- current_week %>% .[k:k,] %>% 
     select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
@@ -1482,10 +1370,14 @@ for(k in 1:nrow(current_week)){
   colnames(biv_pois_new) <- c('home', 'away')
   home_mean_new <- mean(biv_pois_new$home)
   away_mean_new <- mean(biv_pois_new$away)
+  moneyline <- as.data.frame(cbind(biv_pois_new$home, biv_pois_new$away))
+  colnames(moneyline) <- c('home', 'away')
+  moneyline$winner <- ifelse(moneyline$home > moneyline$away, 1,0)
+  home_moneyline <- sum(moneyline$winner / nrow(moneyline))
   total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.32,0.68)))
-  output_new <- c(current_week$Date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2))
+  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.35,0.65)))
+  output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(1-home_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
-  colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
+  colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
   
 }
