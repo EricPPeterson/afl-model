@@ -876,8 +876,6 @@ time_separated_2022 <- sched_2022 %>%
   select(-c(minute, second))
 pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time_separated$hour)
 
-
-
 #pull weather data
 ##############################################################################################################
 #create weather df
@@ -886,12 +884,10 @@ colnames(sched_2022)[c(2:3,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
 weather_output_2022 <- weather_function(sched_2022, weather_api_base, API_KEY)
 colnames(weather_output_2022)[1:4] <- c('date', 'lat', 'long', 'hour')
 weather_output_2022$hour <- as.integer(weather_output_2022$hour)
-write.csv(weather_output_2022, 'weather_output_2022.csv', row.names = FALSE)
 
 ##############################################################################################################
 #attach weather to points per kick df
 ##############################################################################################################
-weather_output_2022 <- read.csv("~/GitHub/afl model/weather_output_2022.csv")
 sched_2022_weather <- left_join(sched_2022, weather_output_2022, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
   distinct()
 weather_output_2022 <- docklands(sched_2022_weather)
@@ -915,8 +911,8 @@ update_df_final <- data.frame(sched_2022) %>% select(home.team.name) %>% unique(
 colnames(update_df_final) <- 'player_team'
 lambda_loop <- lambda_initial_2022
 lambda_loop <- lambda_loop %>% 
-  mutate(alpha = mean_shots * 2,
-         beta = 2)
+  mutate(alpha = mean_shots * 22,
+         beta = 22)
 def_corr_update <- def_stats_2021
 updated_stats <- season_pull(2022,2022)
 output_df <- data.frame()
@@ -961,7 +957,7 @@ while(n < 23){
     home_mean <- mean(biv_pois$home)
     away_mean <- mean(biv_pois$away)
     total <- biv_pois$home + biv_pois$away
-    total_quant <- c(mean(total), quantile(total, probs = c(0.32,0.68)))
+    total_quant <- c(mean(total), quantile(total, probs = c(0.30,0.70)))
     output <- c(new_week$date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
     colnames(final_df) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
@@ -1054,12 +1050,11 @@ table(output_df$over_outcome)
 output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open < 0 & output_df$side > abs(output_df$Home.Line.Open),'home','away')
 output_df$side_bet <- ifelse(output_df$side > 0 & output_df$Home.Line.Open >= 0, 'home', output_df$side_bet)
 output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open < 0,  'away', output_df$side_bet)
-output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open > 0 & abs(output_df$side) < output_df$Home.Line.Open, 'away', output_df$side_bet)
+output_df$side_bet <- ifelse(output_df$side < 0 & output_df$Home.Line.Open > 0 & abs(output_df$side) < output_df$Home.Line.Open, 'home', output_df$side_bet)
 output_df$side_act <- ifelse(output_df$Home.Line.Open <= 0 & (output_df$Home.Score - output_df$Away.Score) > abs(output_df$Home.Line.Open), 'home', 'away')
 output_df$side_act <- ifelse(output_df$Home.Line.Open > 0 & (output_df$Away.Score - output_df$Home.Score) > output_df$Home.Line.Open, 'away', output_df$side_act)
 output_df$side_outcome <- ifelse(output_df$side_act == output_df$side_bet, 'win', 'loss')
 table(output_df$side_outcome)
-
 
 #######################################################################################################################
 #2023 season
@@ -1109,14 +1104,12 @@ colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
 ##############################################################################################################
 weather_output_2023 <- weather_function(sched_2023, weather_api_base, API_KEY)
 colnames(weather_output_2023)[1:4] <- c('date', 'lat', 'long','hour')
-weather_output_2023$date <- as.character(weather_output_2023$date)
 weather_output_2023$hour <- as.integer(weather_output_2023$hour)
-write.csv(weather_output_2023, 'weather_output_2023.csv', row.names = FALSE)
+weather_output_2023$date <- as.character(weather_output_2023$date)
 
 ##############################################################################################################
 #attach weather to points per kick df 2023
 ##############################################################################################################
-weather_output_2023 <- read.csv("~/GitHub/afl model/weather_output_2023.csv")
 sched_2023_weather <- left_join(sched_2023, weather_output_2023, by = c('date', 'hour', 'lat', 'long')) %>%
   distinct()
 sched_2023_weather <- docklands(sched_2023_weather)
@@ -1139,8 +1132,8 @@ update_df_final_2023 <- data.frame(sched_2023) %>% select(home.team.name) %>% un
 colnames(update_df_final_2023) <- 'player_team'
 lambda_loop_2023 <- lambda_initial_2023
 lambda_loop_2023 <- lambda_loop_2023 %>% 
-  mutate(alpha = mean_shots * 2,
-         beta = 2)
+  mutate(alpha = mean_shots * 22,
+         beta = 22)
 def_corr_update_2023 <- def_stats_2022
 updated_stats_2023 <- season_pull(2023,2023)
 output_df_2023 <- data.frame()
@@ -1187,7 +1180,7 @@ while(n < 9){
     home_mean_2023 <- mean(biv_pois_2023$home)
     away_mean_2023 <- mean(biv_pois_2023$away)
     total_2023 <- biv_pois_2023$home + biv_pois_2023$away
-    total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.32,0.68)))
+    total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.30,0.70)))
     output_2023 <- data.frame(new_week_2023$date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023[1],2), round(total_quant_2023[2],2), round(total_quant_2023[3],2))
     final_df_2023 <- rbind(final_df_2023, output_2023)
     
@@ -1280,7 +1273,7 @@ table(output_df_2023$over_outcome)
 output_df_2023$side_bet <- ifelse(output_df_2023$side > 0 & output_df_2023$Home.Line.Open < 0 & output_df_2023$side > abs(output_df_2023$Home.Line.Open),'home','away')
 output_df_2023$side_bet <- ifelse(output_df_2023$side > 0 & output_df_2023$Home.Line.Open >= 0, 'home', output_df_2023$side_bet)
 output_df_2023$side_bet <- ifelse(output_df_2023$side < 0 & output_df_2023$Home.Line.Open < 0,  'away', output_df_2023$side_bet)
-output_df_2023$side_bet <- ifelse(output_df_2023$side < 0 & output_df_2023$Home.Line.Open > 0 & abs(output_df_2023$side) < output_df_2023$Home.Line.Open, 'away', output_df_2023$side_bet)
+output_df_2023$side_bet <- ifelse(output_df_2023$side < 0 & output_df_2023$Home.Line.Open > 0 & abs(output_df_2023$side) < output_df_2023$Home.Line.Open, 'home', output_df_2023$side_bet)
 output_df_2023$side_act <- ifelse(output_df_2023$Home.Line.Open <= 0 & (output_df_2023$Home.Score - output_df_2023$Away.Score) > abs(output_df_2023$Home.Line.Open), 'home', 'away')
 output_df_2023$side_act <- ifelse(output_df_2023$Home.Line.Open > 0 & (output_df_2023$Away.Score - output_df_2023$Home.Score) > output_df_2023$Home.Line.Open, 'away', output_df_2023$side_act)
 output_df_2023$side_outcome <- ifelse(output_df_2023$side_act == output_df_2023$side_bet, 'win', 'loss')
@@ -1341,11 +1334,13 @@ current_week <- left_join(current_week, weather_output_new, by = c('date', 'hour
   distinct()
 current_week <- docklands(current_week)
 final_df_new <- data.frame()
+spread_list <- list()
+total_list <- list()
 
 for(k in 1:nrow(current_week)){
   #lookup mean shots for home and away team
-  home_lambda_new <- lookup(current_week$home.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
-  away_lambda_new <- lookup(current_week$away.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
+  home_lambda_new <- lookup(current_week$home.team.name[k], lambda_initial_2023$player_team, lambda_initial_2023$mean_shots)
+  away_lambda_new <- lookup(current_week$away.team.name[k], lambda_initial_2023$player_team, lambda_initial_2023$mean_shots)
   #lookup adjustment for defense
   home_def_new <- lookup(current_week$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
   away_def_new <- lookup(current_week$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
@@ -1377,9 +1372,45 @@ for(k in 1:nrow(current_week)){
   home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
   away_moneyline <- 1-home_moneyline
   total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.35,0.65)))
+  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.30,0.70)))
   output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
   colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
   
+  #histogram
+  pt_diff <- data.frame(biv_pois_new$home - biv_pois_new$away)
+  colnames(pt_diff) <- 'spread'
+  
+  d2 <- pt_diff %>%
+    summarize(lower = quantile(spread, probs = 0.40),
+              upper = quantile(spread, probs = 0.60))
+  p <- ggplot(pt_diff, aes(x = spread)) +
+        geom_density(aes(fill = 'red')) +
+        geom_vline(data = d2, aes(xintercept = lower)) +
+        annotate('text', label = round(d2$lower, 2), x = d2$lower-20, y = .010) + 
+        geom_vline(data = d2, aes(xintercept = upper)) +
+        annotate('text', label = round(d2$upper,2), x = d2$upper+20, y = .010) +
+        ggtitle(paste0(current_week$home.team.name[k],' vs. ', current_week$away.team.name[k]))
+
+  spread_list[[k]] <- p
+  
+  total <- data.frame(biv_pois_new$home + biv_pois_new$away)
+  colnames(total) <- 'overunder'
+
+  d3 <- total %>%
+    summarize(lower = quantile(overunder, probs = 0.38),
+              upper = quantile(overunder, probs = 0.62))
+  p2 <- ggplot(total, aes(x = overunder)) +
+    geom_density(aes(fill = 'green')) +
+    geom_vline(data = d3, aes(xintercept = lower)) +
+    annotate('text', label = round(d3$lower, 2), x = d3$lower-20, y = .010) + 
+    geom_vline(data = d3, aes(xintercept = upper)) +
+    annotate('text', label = round(d3$upper,2), x = d3$upper+20, y = .010) +
+    ggtitle(paste0(current_week$home.team.name[k],' vs. ', current_week$away.team.name[k]))
+  
+  total_list[[k]] <- p2
+  
+  
 }
+
+write.csv(final_df_new, 'final_df_new.csv', row.names = FALSE)
