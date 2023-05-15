@@ -22,29 +22,29 @@ library(tidyr)
 theODDS_base <- 'https://api.the-odds-api.com/v4/sports/'
 theODDS_sport  <- 'aussierules_afl/'
 theODDS_key <- Sys.getenv('theODDS_key')
-theODDS_region <- 'regions=au'
-theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
-start_date <- as.Date('2023-05-04') 
+theODDS_region <- 'regions=au&'
+#theODDS_markets <- '&markets=spreads,h2h,totals&oddsFormat=decimal&'
+start_date <- as.Date('2023-03-10') 
 theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
 
 #pull API data
-start_date <- as.Date('2022-03-10')
 odds_df <- data.frame()
 y <- 1
 
-while(start_date <= as.Date('2023-05-09')){
-  theODDS_fullAPI <- paste0(theODDS_base, theODDS_sport, theODDS_key, theODDS_region, theODDS_markets, theODDS_date)
+while(start_date <= as.Date('2023-05-13')){
+  theODDS_fullAPI <- paste0(theODDS_base, theODDS_sport, theODDS_key, theODDS_region, theODDS_date)
   
   pull_API <- fromJSON(theODDS_fullAPI)
   afl_odds <- pull_API$data
   odds_df <- rbind(odds_df, afl_odds)
-  start_date <- start_date + 7
+  start_date <- start_date + 1
+  theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
   print(y)
   y <- y+1
 }
 
 odds_df$commence_time <- as.Date(odds_df$commence_time, format = '%Y-%m-%d')
-
+odds_df <- odds_df %>% select(-C(1:3))
 output_odds <- data.frame()
 
 for(i in 1:nrow(odds_df)){
@@ -71,6 +71,7 @@ for(i in 1:nrow(odds_df)){
     over <- rbind(over, bookies_total_over)
     under <- rbind(under, bookies_total_under)
   }
+  if(is.infinite(teams$over|teams$under) == TRUE){next}
   teams$over <- min(over$point)
   teams$under <- max(under$point)
   teams$home_line <- ifelse(hm_side$point[1] < 0, min(hm_side$point),max(hm_side$point))
@@ -1373,10 +1374,11 @@ for(k in 1:nrow(current_week)){
   moneyline <- as.data.frame(cbind(biv_pois_new$home, biv_pois_new$away))
   colnames(moneyline) <- c('home', 'away')
   moneyline$winner <- ifelse(moneyline$home > moneyline$away, 1,0)
-  home_moneyline <- sum(moneyline$winner / nrow(moneyline))
+  home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
+  away_moneyline <- 1-home_moneyline
   total_new <- biv_pois_new$home + biv_pois_new$away
   total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.35,0.65)))
-  output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(1-home_moneyline,2))
+  output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
   colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
   
