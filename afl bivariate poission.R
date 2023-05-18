@@ -44,7 +44,7 @@ while(start_date <= as.Date('2023-05-13')){
 }
 
 odds_df$commence_time <- as.Date(odds_df$commence_time, format = '%Y-%m-%d')
-odds_df <- odds_df %>% select(-C(1:3))
+odds_df <- odds_df %>% select(-c(1:3))
 output_odds <- data.frame()
 
 for(i in 1:nrow(odds_df)){
@@ -668,7 +668,6 @@ pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('date', 'hour', '
 ##############################################################################################################
 #attach weather to points per kick df
 ##############################################################################################################
-pts_per_shot <- read.csv("~/GitHub/afl model/pts_per_shot.csv")
 docklands <- function(df){
   df$winddir <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
   df$windspeed <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
@@ -1092,11 +1091,10 @@ sched_2023_all$away_lat <- lookup(sched_2023_all$away_city, aus_cities$City, aus
 sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Long)
 
 #filter games from 2023 that have already happened
-sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 8)
+sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 9)
 sched_2023$Date <- as.character(sched_2023$Date)
 sched_2023$Hour <- as.integer(sched_2023$Hour)
 colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
-
 
 #pull weather data 2023 
 ##############################################################################################################
@@ -1145,7 +1143,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 9){
+while(n < 10){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1307,7 +1305,6 @@ current_week$away_city <- ifelse(current_week$away_city == 'New South Wales^', '
 current_week$away_lat <- lookup(current_week$away_city, aus_cities$City, aus_cities$Lat)
 current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cities$Long)
 
-
 #pull weather data 2023 
 ##############################################################################################################
 #create weather df 2023
@@ -1413,4 +1410,4 @@ for(k in 1:nrow(current_week)){
   
 }
 
-write.csv(final_df_new, 'final_df_new.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_9.csv', row.names = FALSE)
