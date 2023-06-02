@@ -16,6 +16,14 @@ library(gbm)
 library(lubridate)
 library(jsonlite)
 library(tidyr)
+
+####################################################################################################
+#ideas for 2024
+####################################################################################################
+#boost / weight stats by position
+#player level data to adjust for injuries
+#determine lambda 3 for bivariate model correlation
+
 #################################################################################################################
 #Odds API
 #################################################################################################################
@@ -360,6 +368,11 @@ home_ground <- html %>%
 home_ground <- home_ground[c(-1,-20),]
 home_ground <- home_ground %>% select(-c(2,3,6:12))
 colnames(home_ground) <- c('team', 'city', 'home_ground')
+#correct team names
+home_ground$team <- ifelse(home_ground$team == 'Port AdelaideYartapuulti', 'Port Adelaide', home_ground$team)
+home_ground$team <- ifelse(home_ground$team == 'MelbourneNarrm', 'Melbourne', home_ground$team)
+home_ground$team <- ifelse(home_ground$team == 'FremantleWalyalup', 'Fremantle', home_ground$team)
+
 
 home_stats <- fry_stats %>%
   group_by(match_id, player_team) %>%
@@ -869,10 +882,6 @@ sched_2022$away_city <- lookup(sched_2022$away.team.name, home_ground$team, home
 sched_2022$away_city <- ifelse(sched_2022$away_city == 'New South Wales^', 'New South Wales', sched_2022$away_city)
 sched_2022$away_lat <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$Lat)
 sched_2022$away_lon <- lookup(sched_2022$away_city, aus_cities$City, aus_cities$Long)
-#separate out hour
-time_separated_2022 <- sched_2022 %>% 
-  separate(start_time,c('hour', 'minute', 'second'), sep = ':') %>% 
-  select(-c(minute, second))
 pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time_separated$hour)
 
 #pull weather data
@@ -1091,7 +1100,7 @@ sched_2023_all$away_lat <- lookup(sched_2023_all$away_city, aus_cities$City, aus
 sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Long)
 
 #filter games from 2023 that have already happened
-sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 9)
+sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 12)
 sched_2023$Date <- as.character(sched_2023$Date)
 sched_2023$Hour <- as.integer(sched_2023$Hour)
 colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
@@ -1143,7 +1152,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 10){
+while(n < 12){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1285,7 +1294,7 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 10)
+  select(-c('Second')) %>% filter(round.roundNumber == 13)
 
 #align home team names
 current_week <- sched_team(current_week)
@@ -1361,15 +1370,15 @@ for(k in 1:nrow(current_week)){
   #simulate 100,000 games with home_adj and away_adj as lambdas
   biv_pois_new <- as.data.frame(rbvpois(100000, home_adj_new, away_adj_new[1,1],0) * pts_per_kick_new)
   colnames(biv_pois_new) <- c('home', 'away')
-  home_mean_new <- mean(biv_pois_new$home)
-  away_mean_new <- mean(biv_pois_new$away)
+  home_mean_new <- median(biv_pois_new$home)
+  away_mean_new <- median(biv_pois_new$away)
   moneyline <- as.data.frame(cbind(biv_pois_new$home, biv_pois_new$away))
   colnames(moneyline) <- c('home', 'away')
   moneyline$winner <- ifelse(moneyline$home > moneyline$away, 1,0)
   home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
   away_moneyline <- 1-home_moneyline
   total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.30,0.70)))
+  total_quant_new <- c(median(total_new), quantile(total_new, probs = c(0.40,0.60)))
   output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
   colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
@@ -1395,8 +1404,8 @@ for(k in 1:nrow(current_week)){
   colnames(total) <- 'overunder'
 
   d3 <- total %>%
-    summarize(lower = quantile(overunder, probs = 0.38),
-              upper = quantile(overunder, probs = 0.62))
+    summarize(lower = quantile(overunder, probs = 0.44),
+              upper = quantile(overunder, probs = 0.56))
   p2 <- ggplot(total, aes(x = overunder)) +
     geom_density(aes(fill = 'green')) +
     geom_vline(data = d3, aes(xintercept = lower)) +
@@ -1410,4 +1419,36 @@ for(k in 1:nrow(current_week)){
   
 }
 
-write.csv(final_df_new, 'final_df_9.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_13.csv', row.names = FALSE)
+
+############################################################################################################
+#power rankings
+############################################################################################################
+power_rank <- lambda_loop_2023 %>% select(c(player_team, mean_shots))
+power_rank$league_mean <- mean(lambda_loop_2023$mean_shots)
+power_rank$def_adj <- lookup(power_rank$player_team, def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
+power_rank$def_shots <- power_rank$def_adj * power_rank$league_mean
+rank_pts_2023 <- updated_stats_2023 %>%
+  summarise(pts = (sum(goals * 6) + sum(behinds))/sum(shots_at_goal))
+power_pts <- as.numeric(rank_pts_2023[1,1])
+power_rank <- power_rank %>%
+  mutate(offense_rank = mean_shots * power_pts,
+         defense_rank = def_shots * power_pts)
+power_rank$pts_vs_avg <- power_rank$offense_rank - power_rank$defense_rank
+power_rank <- power_rank %>% 
+  select(c(1,6:8))
+
+write.csv(power_rank, 'power_rank.csv', row.names = FALSE)
+
+
+##############################################################################################################
+#totals CLV
+##############################################################################################################
+totals_clv <- season_pull(2021,2023)
+totals_clv_df <- totals_clv %>%
+  group_by(match_id) %>%
+  mutate(total = match_home_team_score + match_away_team_score) %>%
+  select(match_id, total) %>%
+  distinct()
+
+write.csv(totals_clv_df, 'totals_clv.csv', row.names = FALSE)0

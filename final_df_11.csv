@@ -1,0 +1,14 @@
+date,home_team,away_team,home_mean_score,away_mean_score,side,total,total_low_quantile,total_high_quantile,home_moneyline,away_moneyline
+26/05/2023,Sydney,Carlton,73.42,70.48,2.94,143.9,132.15,155.65,0.49,0.51
+27/05/2023,St Kilda,Hawthorn,78.57,60.44,18.13,139.01,129.95,151.1,0.76,0.24
+27/05/2023,Melbourne,Fremantle,73,50.54,22.46,123.54,115.12,134.77,0.87,0.13
+27/05/2023,Geelong,Greater Western Sydney,79.6,45.83,33.77,127.84,118.19,135.07,0.97,0.03
+27/05/2023,Gold Coast,Western Bulldogs,73.39,79.77,-6.38,153.16,143.59,165.92,0.39,0.61
+27/05/2023,West Coast,Essendon,68.36,87.9,-19.53,159.51,146.49,169.28,0.15,0.85
+28/05/2023,Richmond,Port Adelaide,79.23,79.23,0,158.46,145.79,167.97,0.49,0.51
+28/05/2023,Collingwood,North Melbourne,72.91,42.74,30.17,115.65,105.59,123.19,0.95,0.05
+28/05/2023,Adelaide,Brisbane Lions,64.44,73.64,-9.21,141.15,128.88,150.36,0.29,0.71
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+0.0625,,,,,,,,,,
