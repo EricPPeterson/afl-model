@@ -24,7 +24,7 @@ library(tidyr)
 #player level data to adjust for injuries
 #determine lambda 3 for bivariate model correlation
 #weight recent performance over past?
-#age curve for teams. 
+#age curve for teams to create season starting power rankings. 
 
 #################################################################################################################
 #Odds API
@@ -41,7 +41,7 @@ theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
 odds_df <- data.frame()
 y <- 1
 
-while(start_date <= as.Date('2023-05-13')){
+while(start_date <= as.Date('2023-06-05')){
   theODDS_fullAPI <- paste0(theODDS_base, theODDS_sport, theODDS_key, theODDS_region, theODDS_date)
   
   pull_API <- fromJSON(theODDS_fullAPI)
@@ -98,7 +98,7 @@ odds_df <- read.csv("~/GitHub/afl-model/odds_df.csv")
 #fetch historical odds to backtest
 ##########################################################################################################
 afl_historical_odds <- read.csv("~/GitHub/afl-model/afl_historical_odds.csv")
-colnames(afl_historical_odds) <- unlist(afl_historical_odds[1, ])
+#colnames(afl_historical_odds) <- unlist(afl_historical_odds[1, ])
 afl_historical_odds <- tail(afl_historical_odds, -1)
 afl_historical_odds$Date <- as.Date(dmy(afl_historical_odds$Date))
 afl_historical_odds$season <- as.Date(afl_historical_odds$Date)
@@ -371,9 +371,9 @@ home_ground <- home_ground[c(-1,-20),]
 home_ground <- home_ground %>% select(-c(2,3,6:12))
 colnames(home_ground) <- c('team', 'city', 'home_ground')
 #correct team names
-home_ground$team <- ifelse(home_ground$team == 'Port AdelaideYartapuulti', 'Port Adelaide', home_ground$team)
-home_ground$team <- ifelse(home_ground$team == 'MelbourneNarrm', 'Melbourne', home_ground$team)
-home_ground$team <- ifelse(home_ground$team == 'FremantleWalyalup', 'Fremantle', home_ground$team)
+#home_ground$team <- ifelse(home_ground$team == 'Port AdelaideYartapuulti', 'Port Adelaide', home_ground$team)
+#home_ground$team <- ifelse(home_ground$team == 'MelbourneNarrm', 'Melbourne', home_ground$team)
+#home_ground$team <- ifelse(home_ground$team == 'FremantleWalyalup', 'Fremantle', home_ground$team)
 
 
 home_stats <- fry_stats %>%
@@ -453,8 +453,8 @@ fry_stats_2021 <- fetch_player_stats_fryzigg(season = 2021)
 fry_stats_2022 <- fetch_player_stats_fryzigg(season = 2022)
 fry_stats_2021 <- fry_stats_2021 %>% filter(!(match_round %in% c('Semi Finals', 'Preliminary Finals', 'Grand Final', 'Finals Week 1')))
 fry_stats_2022 <- fry_stats_2022 %>% filter(!(match_round %in% c('Semi Finals', 'Preliminary Finals', 'Grand Final', 'Finals Week 1')))
-fry_stats_2021$match_round <- is.numeric(fry_stats_2021$match_round)
-fry_stats_2022$match_round <- is.numeric(fry_stats_2022$match_round)
+fry_stats_2021$match_round <- as.numeric(fry_stats_2021$match_round)
+fry_stats_2022$match_round <- as.numeric(fry_stats_2022$match_round)
 fry_stats_2021$opposition <- fry_stats_2022$opposition <- NA
 
 #create a column for who the opposition was in every game
@@ -619,6 +619,8 @@ pts_per_shot <- fry_stats %>% group_by(match_id) %>%
             total_points = sum(goals * 6 + behinds),
             points_per_kick = total_points / total_shots)
 
+pts_per_shot$season <- lookup(pts_per_shot$match_id, fry_stats$match_id, fry_stats$season)
+
 #assign lat lon for each game
 library(tidyr)
 pts_per_shot$home_team <- lookup(pts_per_shot$match_id, fry_stats$match_id, fry_stats$match_home_team)
@@ -633,6 +635,14 @@ time_separated <- pts_per_shot %>%
   separate(start_time,c('hour', 'minute', 'second'), sep = ':') %>% 
   select(-c(minute, second))
 pts_per_shot$hour <- lookup(pts_per_shot$match_id, time_separated$match_id, time_separated$hour)
+
+pts_per_year <- fry_stats %>%
+  group_by(season) %>%
+  summarize(total_shots = sum(shots_at_goal),
+            total_points = sum(goals * 6 + behinds),
+            season_avg = total_points / total_shots)
+
+pts_per_shot$season_avg <- lookup(pts_per_shot$season, pts_per_year$season, pts_per_year$season_avg)
 
 #############################################################################################################
 #create function to pull weather data
@@ -678,7 +688,7 @@ weather_function <- function(df, base, key){
 weather_output <- weather_function(pts_per_shot, weather_api_base, API_KEY)
 colnames(weather_output)[1:4] <- c('date','lat', 'long','hour')
 pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
-  select(-c(total_shots, total_points, home_team, city, lat, long, date, start_time, hour)) %>% distinct()
+  select(-c(season, total_shots, total_points, home_team, city, lat, long, date, start_time, hour)) %>% distinct()
 
 ##############################################################################################################
 #attach weather to points per kick df
@@ -900,6 +910,14 @@ weather_output_2022$hour <- as.integer(weather_output_2022$hour)
 ##############################################################################################################
 sched_2022_weather <- left_join(sched_2022, weather_output_2022, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
   distinct()
+
+pts_per_2021 <- fry_stats_2021 %>%
+  summarize(total_shots = sum(shots_at_goal),
+            total_points = sum(goals * 6 + behinds),
+            season_avg = total_points / total_shots)
+
+sched_2022_weather$season_avg <- pts_per_2021$season_avg
+
 weather_output_2022 <- docklands(sched_2022_weather)
 
 ##############################################################################################################
@@ -953,7 +971,7 @@ while(n < 23){
     home_adj <- (home_lambda * away_def)
     away_adj <- (away_lambda * home_def) - hfa_adj
     #pts_per_kick
-    df_pts <- new_week %>% .[k:k,] %>% select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
+    df_pts <- new_week %>% .[k:k,] %>% select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
     pts_rf <- predict(rf_gridsearch_pts, newdata = df_pts)
     pts_xboost <- predict(gbm_model_pts, newdata = df_pts)
     pts_gbm <- predict(xboost_model_pts, newdata = df_pts)
@@ -967,7 +985,7 @@ while(n < 23){
     home_mean <- mean(biv_pois$home)
     away_mean <- mean(biv_pois$away)
     total <- biv_pois$home + biv_pois$away
-    total_quant <- c(mean(total), quantile(total, probs = c(0.30,0.70)))
+    total_quant <- c(mean(total), quantile(total, probs = c(0.40,0.60)))
     output <- c(new_week$date[k], new_week$home.team.name[k], new_week$away.team.name[k], round(home_mean,2), round(away_mean,2), round(home_mean - away_mean,2), round(total_quant,2))
     final_df <- rbind(final_df, output)
     colnames(final_df) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile')
@@ -1006,6 +1024,14 @@ while(n < 23){
     mutate(def_diff = mean_game_shots - league_mean,
            def_pct = mean_game_shots / league_mean)
 
+  #update pts_per_shot
+  pts_per_2022 <- fry_stats_2022 %>%
+    filter(match_round <= n) %>% 
+    summarize(total_shots = sum(shots_at_goal),
+              total_points = sum(goals * 6 + behinds),
+              season_avg = total_points / total_shots)
+  sched_2022_weather$season_avg <- pts_per_2022$season_avg
+  
   #update lambda
   update_lambda_rf <- predict(rf_gridsearch, newdata = stats_grouped_update[,-c(1:3)])
   update_lambda_gbm <- predict(gbm_model, newdata = stats_grouped_update[,-c(1:3)])
@@ -1121,6 +1147,14 @@ weather_output_2023$date <- as.character(weather_output_2023$date)
 ##############################################################################################################
 sched_2023_weather <- left_join(sched_2023, weather_output_2023, by = c('date', 'hour', 'lat', 'long')) %>%
   distinct()
+
+pts_per_2022 <- fry_stats_2022 %>%
+  summarize(total_shots = sum(shots_at_goal),
+            total_points = sum(goals * 6 + behinds),
+            season_avg = total_points / total_shots)
+
+sched_2023_weather$season_avg <- pts_per_2022$season_avg
+
 sched_2023_weather <- docklands(sched_2023_weather)
 
 ##############################################################################################################
@@ -1150,11 +1184,12 @@ defense_df_2023 <- data.frame()
 df_2023_final <- data.frame()
 combined_defense_2023 <- def_stats_2022
 colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
+fry_stats_2023 <- season_pull(2023,2023)
 
 #set initial n
 n = 1
 
-while(n < 12){
+while(n < 13){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1175,7 +1210,7 @@ while(n < 12){
     away_adj_2023 <- (away_lambda_2023 * home_def_2023) - hfa_adj_2023
     #pts_per_kick
     df_pts_2023 <- new_week_2023 %>% .[k:k,] %>% 
-      select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
+      select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
     pts_rf_2023 <- predict(rf_gridsearch_pts, newdata = df_pts_2023)
     pts_xboost_2023 <- predict(gbm_model_pts, newdata = df_pts_2023)
     pts_gbm_2023 <- predict(xboost_model_pts, newdata = df_pts_2023)
@@ -1227,6 +1262,14 @@ while(n < 12){
   def_corr_update_2023 <- def_corr_update_2023 %>%
     mutate(def_diff = mean_game_shots - league_mean,
            def_pct = mean_game_shots / league_mean)
+
+  #update pts_per_shot
+  pts_per_2023 <- fry_stats_2023 %>%
+    filter(match_round <= n) %>% 
+    summarize(total_shots = sum(shots_at_goal),
+              total_points = sum(goals * 6 + behinds),
+              season_avg = total_points / total_shots)
+  sched_2023_weather$season_avg <- pts_per_2023$season_avg
   
   #update lambda
   update_lambda_rf_2023 <- predict(rf_gridsearch, newdata = stats_grouped_update_2023[,-c(1:3)])
@@ -1322,6 +1365,7 @@ current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cit
 ##############################################################################################################
 colnames(current_week)[c(2,3,14:16)] <- c('date', 'hour', 'city','lat','long') 
 weather_output_new <- weather_function(current_week, weather_api_base, API_KEY)
+weather_output_new$season_avg <- pts_per_2023$season_avg
 colnames(weather_output_new)[1:4] <- c('date', 'lat', 'long', 'hour')
 
 ##############################################################################################################
@@ -1361,7 +1405,7 @@ for(k in 1:nrow(current_week)){
   away_adj_new <- (away_lambda_new * home_def_new) - hfa_adj_new
   #pts_per_kick
   df_pts_new <- current_week %>% .[k:k,] %>% 
-    select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
+    select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
   pts_rf_new <- predict(rf_gridsearch_pts, newdata = df_pts_new)
   pts_xboost_new <- predict(gbm_model_pts, newdata = df_pts_new)
   pts_gbm_new <- predict(xboost_model_pts, newdata = df_pts_new)
@@ -1406,8 +1450,8 @@ for(k in 1:nrow(current_week)){
   colnames(total) <- 'overunder'
 
   d3 <- total %>%
-    summarize(lower = quantile(overunder, probs = 0.44),
-              upper = quantile(overunder, probs = 0.56))
+    summarize(lower = quantile(overunder, probs = 0.36),
+              upper = quantile(overunder, probs = 0.64))
   p2 <- ggplot(total, aes(x = overunder)) +
     geom_density(aes(fill = 'green')) +
     geom_vline(data = d3, aes(xintercept = lower)) +
