@@ -916,6 +916,14 @@ pts_per_2021 <- fry_stats_2021 %>%
             total_points = sum(goals * 6 + behinds),
             season_avg = total_points / total_shots)
 
+game_pts_2021 <- fry_stats_2021 %>%
+  group_by(match_id) %>%
+  summarize(total_shots = sum(shots_at_goal),
+            total_points = sum(goals * 6 + behinds),
+            game_avg = total_points / total_shots)
+
+sd_pts_2021 <- sd(game_pts_2021$game_avg)
+
 sched_2022_weather$season_avg <- pts_per_2021$season_avg
 
 weather_output_2022 <- docklands(sched_2022_weather)
@@ -947,6 +955,7 @@ output_df <- data.frame()
 defense_df <- data.frame()
 combined_defense <- def_stats_2021
 colnames(combined_defense) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
+kick_sd <- sd_pts_2021
 
 #set initial n
 n = 1
@@ -980,7 +989,10 @@ while(n < 23){
     pts_per_kick <- predict(ensemble_model, lm_df)
     
     #simulate 100,000 games with home_adj and away_adj as lambdas
-    biv_pois <- as.data.frame(rbvpois(100000, home_adj, away_adj[1,1],0) * pts_per_kick)
+    pts_2022 <- rnorm(100000, pts_per_kick, kick_sd)
+    biv_pois <- as.data.frame(rbvpois(100000, home_adj, away_adj[1,1],0))
+    biv_pois <- as.data.frame(cbind(biv_pois, pts_2022))
+    biv_pois <- as.data.frame(cbind(biv_pois$V1 * biv_pois$pts_2022,biv_pois$V2 * biv_pois$pts_2022))
     colnames(biv_pois) <- c('home', 'away')
     home_mean <- mean(biv_pois$home)
     away_mean <- mean(biv_pois$away)
@@ -1031,6 +1043,16 @@ while(n < 23){
               total_points = sum(goals * 6 + behinds),
               season_avg = total_points / total_shots)
   sched_2022_weather$season_avg <- pts_per_2022$season_avg
+  
+  sd_2022 <- fry_stats_2022 %>%
+    group_by(match_id) %>%
+    summarize(total_shots = sum(shots_at_goal),
+              total_points = sum(goals * 6 + behinds),
+              game_avg = total_points / total_shots)
+  sd_2022 <- sd(sd_2022$game_avg)
+  
+  #update sd
+  #kick_sd <- sqrt((sd_2022^2 * sd_pts_2021)/(n *sd_2022 + sd_pts_2021))
   
   #update lambda
   update_lambda_rf <- predict(rf_gridsearch, newdata = stats_grouped_update[,-c(1:3)])
@@ -1153,6 +1175,13 @@ pts_per_2022 <- fry_stats_2022 %>%
             total_points = sum(goals * 6 + behinds),
             season_avg = total_points / total_shots)
 
+game_pts_per_shot <- fry_stats_2022 %>%
+  group_by(match_id) %>%
+  summarize(total_shots = sum(shots_at_goal),
+            total_points = sum(goals * 6 + behinds),
+            gm_avg = total_points / total_shots)
+sd_pts_2022 <- sd(game_pts_per_shot$gm_avg)
+
 sched_2023_weather$season_avg <- pts_per_2022$season_avg
 
 sched_2023_weather <- docklands(sched_2023_weather)
@@ -1185,6 +1214,7 @@ df_2023_final <- data.frame()
 combined_defense_2023 <- def_stats_2022
 colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league_mean_0', 'def_diff_0', 'def_pct_0')
 fry_stats_2023 <- season_pull(2023,2023)
+
 
 #set initial n
 n = 1
@@ -1271,6 +1301,9 @@ while(n < 13){
               season_avg = total_points / total_shots)
   sched_2023_weather$season_avg <- pts_per_2023$season_avg
   
+  #update sd
+  sd_2023 <- sd
+  
   #update lambda
   update_lambda_rf_2023 <- predict(rf_gridsearch, newdata = stats_grouped_update_2023[,-c(1:3)])
   update_lambda_gbm_2023 <- predict(gbm_model, newdata = stats_grouped_update_2023[,-c(1:3)])
@@ -1339,7 +1372,7 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 13)
+  select(-c('Second')) %>% filter(round.roundNumber == 14)
 
 #align home team names
 current_week <- sched_team(current_week)
@@ -1465,7 +1498,7 @@ for(k in 1:nrow(current_week)){
   
 }
 
-write.csv(final_df_new, 'final_df_13.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_14.csv', row.names = FALSE)
 
 ############################################################################################################
 #power rankings
