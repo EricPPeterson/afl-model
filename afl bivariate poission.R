@@ -98,8 +98,6 @@ odds_df <- read.csv("~/GitHub/afl-model/odds_df.csv")
 #fetch historical odds to backtest
 ##########################################################################################################
 afl_historical_odds <- read.csv("~/GitHub/afl-model/afl_historical_odds.csv")
-colnames(afl_historical_odds) <- unlist(afl_historical_odds[1, ])
-afl_historical_odds <- tail(afl_historical_odds, -1)
 afl_historical_odds$Date <- as.Date(dmy(afl_historical_odds$Date))
 afl_historical_odds$season <- as.Date(afl_historical_odds$Date)
 afl_historical_odds$season <- format(afl_historical_odds$season, format = '%Y')
@@ -348,6 +346,7 @@ aus_cities$City <- ifelse(aus_cities$City == 'Alice','Alice Springs', aus_cities
 url <- 'https://en.wikipedia.org/wiki/Australian_Football_League'
 html <- read_html(url)
 
+
 #change cities to states to match home ground and home stats dfs. 
 aus_cities$City <- ifelse(aus_cities$City == 'Adelaide', 'South Australia', aus_cities$City)
 aus_cities$City <- ifelse(aus_cities$City == 'Alice Springs'| aus_cities$City =='Darwin', 'Northern Territories', aus_cities$City)
@@ -370,12 +369,11 @@ home_ground <- html %>%
 home_ground <- home_ground[c(-1,-20),]
 home_ground <- home_ground %>% select(-c(2,3,6:12))
 colnames(home_ground) <- c('team', 'city', 'home_ground')
-#correct team names
-home_ground$team <- ifelse(home_ground$team == 'Port AdelaideYartapuulti', 'Port Adelaide', home_ground$team)
-home_ground$team <- ifelse(home_ground$team == 'MelbourneNarrm', 'Melbourne', home_ground$team)
-home_ground$team <- ifelse(home_ground$team == 'FremantleWalyalup', 'Fremantle', home_ground$team)
 
 
+###################################################################################################################
+#HFA adjustments
+###################################################################################################################
 home_stats <- fry_stats %>%
   group_by(match_id, player_team) %>%
   summarise(total_shots = sum(shots_at_goal))
@@ -393,6 +391,7 @@ home_stats$home_city <- ifelse(home_stats$home_city == 'New South Wales^', 'New 
 home_stats$away_city <- ifelse(home_stats$away_city == 'New South Wales^', 'New South Wales', home_stats$away_city)
 
 #calc travel distance for away teams
+
 home_stats$home_lat <- lookup(home_stats$home_city,aus_cities$City, aus_cities$Lat)
 home_stats$home_lon <- lookup(home_stats$home_city,aus_cities$City, aus_cities$Long)
 home_stats$away_lat <- lookup(home_stats$away_city,aus_cities$City, aus_cities$Lat)
@@ -466,6 +465,7 @@ for(i in 1: nrow(fry_stats_2021)) {
     fry_stats_2021$opposition[i] <- fry_stats_2021$match_home_team[i]
   }
 }
+
 #create a column for who the opposition was in every game for 2022
 #will allow me to see what teams give up lots of shots in 2022
 for(i in 1: nrow(fry_stats_2022)) {
@@ -684,10 +684,10 @@ pts_per_shot <- left_join(pts_per_shot, weather_output, by = c('date', 'hour', '
 #attach weather to points per kick df
 ##############################################################################################################
 docklands <- function(df){
-  df$winddir <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
-  df$windspeed <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$winddir)
-  df$precip <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0, df$precip)
-  df$precipprob <- ifelse(df$home_ground == 'Docklands Stadium' & df$precipprob > 0,0, df$precip)
+  df$winddir <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0,df$winddir)
+  df$windspeed <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0,df$windspeed)
+  df$precip <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0,df$precip)
+  df$precipprob <- ifelse(df$home_ground == 'Docklands Stadium' & df$precipprob > 0,0,df$precipprob)
   return(df)
 }
 pts_per_shot <- docklands(pts_per_shot)
@@ -1154,7 +1154,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 12){
+while(n < 13){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1296,7 +1296,7 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 13)
+  select(-c('Second')) %>% filter(round.roundNumber == 14)
 
 #align home team names
 current_week <- sched_team(current_week)
@@ -1322,7 +1322,7 @@ current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cit
 ##############################################################################################################
 colnames(current_week)[c(2,3,14:16)] <- c('date', 'hour', 'city','lat','long') 
 weather_output_new <- weather_function(current_week, weather_api_base, API_KEY)
-colnames(weather_output_new)[1:4] <- c('date', 'lat', 'long', 'hour')
+colnames(weather_output_new)[1:3] <- c('date', 'lat', 'long')
 
 ##############################################################################################################
 #add travel column and add distance traveled by away team 2023
@@ -1338,12 +1338,13 @@ for(i in 1:nrow(current_week)){
 ##############################################################################################################
 #new week predictions
 ##############################################################################################################
-current_week <- left_join(current_week, weather_output_new, by = c('date', 'hour', 'lat', 'long')) %>%
+current_week <- left_join(current_week, weather_output_new, by = c('date', 'hour', 'lat', 'long'), relationship = 'many-to-many') %>%
   distinct()
 current_week <- docklands(current_week)
 final_df_new <- data.frame()
 spread_list <- list()
 total_list <- list()
+pts_new <- data.frame()
 
 for(k in 1:nrow(current_week)){
   #lookup mean shots for home and away team
@@ -1360,6 +1361,7 @@ for(k in 1:nrow(current_week)){
   home_adj_new <- (home_lambda_new * away_def_new)
   away_adj_new <- (away_lambda_new * home_def_new) - hfa_adj_new
   #pts_per_kick
+  
   df_pts_new <- current_week %>% .[k:k,] %>% 
     select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions))
   pts_rf_new <- predict(rf_gridsearch_pts, newdata = df_pts_new)
@@ -1372,15 +1374,15 @@ for(k in 1:nrow(current_week)){
   #simulate 100,000 games with home_adj and away_adj as lambdas
   biv_pois_new <- as.data.frame(rbvpois(100000, home_adj_new, away_adj_new[1,1],0) * pts_per_kick_new)
   colnames(biv_pois_new) <- c('home', 'away')
-  home_mean_new <- median(biv_pois_new$home)
-  away_mean_new <- median(biv_pois_new$away)
+  home_mean_new <- mean(biv_pois_new$home)
+  away_mean_new <- mean(biv_pois_new$away)
   moneyline <- as.data.frame(cbind(biv_pois_new$home, biv_pois_new$away))
   colnames(moneyline) <- c('home', 'away')
   moneyline$winner <- ifelse(moneyline$home > moneyline$away, 1,0)
   home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
   away_moneyline <- 1-home_moneyline
   total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(median(total_new), quantile(total_new, probs = c(0.40,0.60)))
+  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.40,0.60)))
   output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
   colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
@@ -1390,8 +1392,8 @@ for(k in 1:nrow(current_week)){
   colnames(pt_diff) <- 'spread'
   
   d2 <- pt_diff %>%
-    summarize(lower = quantile(spread, probs = 0.40),
-              upper = quantile(spread, probs = 0.60))
+    summarize(lower = quantile(spread, probs = 0.35),
+              upper = quantile(spread, probs = 0.65))
   p <- ggplot(pt_diff, aes(x = spread)) +
         geom_density(aes(fill = 'red')) +
         geom_vline(data = d2, aes(xintercept = lower)) +
@@ -1417,11 +1419,12 @@ for(k in 1:nrow(current_week)){
     ggtitle(paste0(current_week$home.team.name[k],' vs. ', current_week$away.team.name[k]))
   
   total_list[[k]] <- p2
-  
+  #save df pts_per_week
+  pts_new <- rbind(pts_new, pts_per_kick_new)
   
 }
 
-write.csv(final_df_new, 'final_df_13.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_14.csv', row.names = FALSE)
 
 ############################################################################################################
 #power rankings
@@ -1453,4 +1456,4 @@ totals_clv_df <- totals_clv %>%
   select(match_id, total) %>%
   distinct()
 
-write.csv(totals_clv_df, 'totals_clv.csv', row.names = FALSE)0
+write.csv(totals_clv_df, 'totals_clv.csv', row.names = FALSE)

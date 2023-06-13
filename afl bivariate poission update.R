@@ -915,6 +915,7 @@ pts_per_2021 <- fry_stats_2021 %>%
   summarize(total_shots = sum(shots_at_goal),
             total_points = sum(goals * 6 + behinds),
             season_avg = total_points / total_shots)
+pts_per_2022 <- pts_per_2021[3]
 
 game_pts_2021 <- fry_stats_2021 %>%
   group_by(match_id) %>%
@@ -924,14 +925,14 @@ game_pts_2021 <- fry_stats_2021 %>%
 
 sd_pts_2021 <- sd(game_pts_2021$game_avg)
 
-sched_2022_weather$season_avg <- pts_per_2021$season_avg
+sched_2022_weather$season_avg <- pts_per_2022$season_avg
 
 weather_output_2022 <- docklands(sched_2022_weather)
 
 ##############################################################################################################
 #add travel column and add distance traveled by away team
 ##############################################################################################################
-#calc travel distance for awa#away travel
+#calc travel distance for away travel
 sched_2022_weather$travel <- NA
 for(i in 1:nrow(sched_2022_weather)){
   sched_2022_weather$travel[i] <- distm(c(sched_2022_weather$lat[i],sched_2022_weather$long[i]),c(sched_2022_weather$away_lat[i], sched_2022_weather$away_lon[i]),
@@ -960,7 +961,7 @@ kick_sd <- sd_pts_2021
 #set initial n
 n = 1
 
-while(n < 23){
+while(n <= 23){
   final_df <- data.frame()
   #filter to just current week
   new_week <- sched_2022_weather %>% filter(round.roundNumber == n)
@@ -977,8 +978,12 @@ while(n < 23){
     #HFA
     hfa_adj <- home_base[2] - travel_int  - (sched_2022_weather$travel[k] * travel_coeff)
     #adjusted lambdas
-    home_adj <- (home_lambda * away_def)
-    away_adj <- (away_lambda * home_def) - hfa_adj
+    pts_home <- lookup(new_week$home.team.name[k],def_corr_update$player_team, def_corr_update$league_mean)
+    pts_away <- lookup(new_week$away.team.name[k], def_corr_update$player_team, def_corr_update$league_mean)
+    home_correction <- abs((home_lambda - pts_away) * away_def)
+    away_correction <- abs((away_lambda - pts_home) * home_def)
+    home_adj <- ifelse(away_def > 1, home_lambda + home_correction, home_lambda - home_correction)
+    away_adj <- ifelse(home_def > 1, away_lambda + away_correction - hfa_adj, away_lambda - away_correction - hfa_adj)
     #pts_per_kick
     df_pts <- new_week %>% .[k:k,] %>% select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
     pts_rf <- predict(rf_gridsearch_pts, newdata = df_pts)
@@ -990,9 +995,9 @@ while(n < 23){
     
     #simulate 100,000 games with home_adj and away_adj as lambdas
     pts_2022 <- rnorm(100000, pts_per_kick, kick_sd)
-    biv_pois <- as.data.frame(rbvpois(100000, home_adj, away_adj[1,1],0))
+    biv_pois <- as.data.frame(rbvpois(100000, as.numeric(home_adj), as.numeric(away_adj),0))
     biv_pois <- as.data.frame(cbind(biv_pois, pts_2022))
-    biv_pois <- as.data.frame(cbind(biv_pois$V1 * biv_pois$pts_2022,biv_pois$V2 * biv_pois$pts_2022))
+    biv_pois <- as.data.frame(cbind(biv_pois$V1 * biv_pois$pts_2022, biv_pois$V2 * biv_pois$pts_2022))
     colnames(biv_pois) <- c('home', 'away')
     home_mean <- mean(biv_pois$home)
     away_mean <- mean(biv_pois$away)
@@ -1042,7 +1047,7 @@ while(n < 23){
     summarize(total_shots = sum(shots_at_goal),
               total_points = sum(goals * 6 + behinds),
               season_avg = total_points / total_shots)
-  sched_2022_weather$season_avg <- pts_per_2022$season_avg
+  pts_per_2022 <- pts_per_2022$season_avg
   
   sd_2022 <- fry_stats_2022 %>%
     group_by(match_id) %>%
@@ -1050,9 +1055,6 @@ while(n < 23){
               total_points = sum(goals * 6 + behinds),
               game_avg = total_points / total_shots)
   sd_2022 <- sd(sd_2022$game_avg)
-  
-  #update sd
-  #kick_sd <- sqrt((sd_2022^2 * sd_pts_2021)/(n *sd_2022 + sd_pts_2021))
   
   #update lambda
   update_lambda_rf <- predict(rf_gridsearch, newdata = stats_grouped_update[,-c(1:3)])
@@ -1174,13 +1176,14 @@ pts_per_2022 <- fry_stats_2022 %>%
   summarize(total_shots = sum(shots_at_goal),
             total_points = sum(goals * 6 + behinds),
             season_avg = total_points / total_shots)
+pts_per_2023 <- pts_per_2022$season_avg
 
 game_pts_per_shot <- fry_stats_2022 %>%
   group_by(match_id) %>%
   summarize(total_shots = sum(shots_at_goal),
             total_points = sum(goals * 6 + behinds),
             gm_avg = total_points / total_shots)
-sd_pts_2022 <- sd(game_pts_per_shot$gm_avg)
+kick_sd_2023  <- sd(game_pts_per_shot$gm_avg)
 
 sched_2023_weather$season_avg <- pts_per_2022$season_avg
 
@@ -1236,8 +1239,15 @@ while(n < 13){
     #HFA
     hfa_adj_2023 <- home_base[2] - travel_int  - (sched_2023_weather$travel[k] * travel_coeff)
     #adjusted lambdas
-    home_adj_2023 <- (home_lambda_2023 * away_def_2023)
-    away_adj_2023 <- (away_lambda_2023 * home_def_2023) - hfa_adj_2023
+    home_pts <- lookup(new_week_2023$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$league_mean)
+    away_pts <- lookup(new_week_2023$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$league_mean)
+    home_correction_2023 <- abs((home_lambda_2023 - away_pts) * away_def_2023)
+    away_correction_2023 <- abs((away_lambda_2023 - home_pts) * home_def_2023)
+    home_adj_2023 <- ifelse(away_def_2023 > 1, home_lambda_2023 + home_correction_2023, 
+                            home_lambda_2023 - home_correction_2023)
+    away_adj_2023 <- ifelse(home_def_2023 > 1, away_lambda_2023 + away_correction_2023 - hfa_adj_2023, 
+                            away_lambda_2023 - away_correction_2023 - hfa_adj_2023)
+    
     #pts_per_kick
     df_pts_2023 <- new_week_2023 %>% .[k:k,] %>% 
       select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
@@ -1249,12 +1259,16 @@ while(n < 13){
     pts_per_kick_2023 <- predict(ensemble_model, lm_df_2023)
     
     #simulate 100,000 games with home_adj and away_adj as lambdas
-    biv_pois_2023 <- as.data.frame(rbvpois(100000, home_adj_2023, away_adj_2023[1,1],0) * pts_per_kick_2023)
+    pts_2023 <- rnorm(100000, pts_per_kick_2023, kick_sd_2023)
+    biv_pois_2023 <- as.data.frame(rbvpois(100000, as.numeric(home_adj_2023), as.numeric(away_adj_2023),0))
+    biv_pois_2023 <- as.data.frame(cbind(biv_pois_2023,pts_2023))
+    biv_pois_2023 <- as.data.frame(cbind((biv_pois_2023$V1 * biv_pois_2023$pts_2023),
+                                         (biv_pois_2023$V2 * biv_pois_2023$pts_2023)))
     colnames(biv_pois_2023) <- c('home', 'away')
     home_mean_2023 <- mean(biv_pois_2023$home)
     away_mean_2023 <- mean(biv_pois_2023$away)
     total_2023 <- biv_pois_2023$home + biv_pois_2023$away
-    total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.30,0.70)))
+    total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.40,0.60)))
     output_2023 <- data.frame(new_week_2023$date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023[1],2), round(total_quant_2023[2],2), round(total_quant_2023[3],2))
     final_df_2023 <- rbind(final_df_2023, output_2023)
     
@@ -1299,10 +1313,7 @@ while(n < 13){
     summarize(total_shots = sum(shots_at_goal),
               total_points = sum(goals * 6 + behinds),
               season_avg = total_points / total_shots)
-  sched_2023_weather$season_avg <- pts_per_2023$season_avg
-  
-  #update sd
-  sd_2023 <- sd
+  pts_per_2023 <- pts_per_2023$season_avg
   
   #update lambda
   update_lambda_rf_2023 <- predict(rf_gridsearch, newdata = stats_grouped_update_2023[,-c(1:3)])
@@ -1398,7 +1409,6 @@ current_week$away_lon <- lookup(current_week$away_city, aus_cities$City, aus_cit
 ##############################################################################################################
 colnames(current_week)[c(2,3,14:16)] <- c('date', 'hour', 'city','lat','long') 
 weather_output_new <- weather_function(current_week, weather_api_base, API_KEY)
-weather_output_new$season_avg <- pts_per_2023$season_avg
 colnames(weather_output_new)[1:4] <- c('date', 'lat', 'long', 'hour')
 
 ##############################################################################################################
@@ -1417,6 +1427,7 @@ for(i in 1:nrow(current_week)){
 ##############################################################################################################
 current_week <- left_join(current_week, weather_output_new, by = c('date', 'hour', 'lat', 'long')) %>%
   distinct()
+current_week$season_avg <- pts_per_2023
 current_week <- docklands(current_week)
 final_df_new <- data.frame()
 spread_list <- list()
@@ -1424,80 +1435,52 @@ total_list <- list()
 
 for(k in 1:nrow(current_week)){
   #lookup mean shots for home and away team
-  home_lambda_new <- lookup(current_week$home.team.name[k], lambda_initial_2023$player_team, lambda_initial_2023$mean_shots)
-  away_lambda_new <- lookup(current_week$away.team.name[k], lambda_initial_2023$player_team, lambda_initial_2023$mean_shots)
+  home_lambda_2023 <- lookup(new_week_2023$home.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
+  away_lambda_2023 <- lookup(new_week_2023$away.team.name[k], lambda_loop_2023$player_team, lambda_loop_2023$mean_shots)
   #lookup adjustment for defense
-  home_def_new <- lookup(current_week$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
-  away_def_new <- lookup(current_week$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
+  home_def_2023 <- lookup(new_week_2023$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
+  away_def_2023 <- lookup(new_week_2023$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$def_pct)
   #travel_adj 
-  travel_adj_new <- travel_coeff * current_week$travel[k]
+  travel_adj_2023 <- travel_coeff * sched_2023_weather$travel[k]
   #HFA
-  hfa_adj_new <- home_base[2] - travel_int  - (current_week$travel[k] * travel_coeff)
+  hfa_adj_2023 <- home_base[2] - travel_int  - (sched_2023_weather$travel[k] * travel_coeff)
   #adjusted lambdas
-  home_adj_new <- (home_lambda_new * away_def_new)
-  away_adj_new <- (away_lambda_new * home_def_new) - hfa_adj_new
+  home_pts <- lookup(new_week_2023$home.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$league_mean)
+  away_pts <- lookup(new_week_2023$away.team.name[k], def_corr_update_2023$player_team, def_corr_update_2023$league_mean)
+  home_correction_2023 <- abs((home_lambda_2023 - away_pts) * away_def_2023)
+  away_correction_2023 <- abs((away_lambda_2023 - home_pts) * home_def_2023)
+  home_adj_2023 <- ifelse(away_def_2023 > 1, home_lambda_2023 + home_correction_2023, 
+                          home_lambda_2023 - home_correction_2023)
+  away_adj_2023 <- ifelse(home_def_2023 > 1, away_lambda_2023 + away_correction_2023 - hfa_adj_2023, 
+                          away_lambda_2023 - away_correction_2023 - hfa_adj_2023)
+  
   #pts_per_kick
-  df_pts_new <- current_week %>% .[k:k,] %>% 
+  df_pts_2023 <- new_week_2023 %>% .[k:k,] %>% 
     select(c(home_ground, temp, humidity, dew, precip, precipprob, windspeed, winddir, conditions, season_avg))
-  pts_rf_new <- predict(rf_gridsearch_pts, newdata = df_pts_new)
-  pts_xboost_new <- predict(gbm_model_pts, newdata = df_pts_new)
-  pts_gbm_new <- predict(xboost_model_pts, newdata = df_pts_new)
-  lm_df_new <- data.frame(pts_rf_new, pts_xboost_new, pts_gbm_new)
-  colnames(lm_df_new) <- c('preds_rf', 'preds_gbm', 'preds_xboost')
-  pts_per_kick_new <- predict(ensemble_model, lm_df_new)
+  pts_rf_2023 <- predict(rf_gridsearch_pts, newdata = df_pts_2023)
+  pts_xboost_2023 <- predict(gbm_model_pts, newdata = df_pts_2023)
+  pts_gbm_2023 <- predict(xboost_model_pts, newdata = df_pts_2023)
+  lm_df_2023 <- data.frame(pts_rf_2023, pts_xboost_2023, pts_gbm_2023)
+  colnames(lm_df_2023) <- c('preds_rf', 'preds_gbm', 'preds_xboost')
+  pts_per_kick_2023 <- predict(ensemble_model, lm_df_2023)
   
   #simulate 100,000 games with home_adj and away_adj as lambdas
-  biv_pois_new <- as.data.frame(rbvpois(100000, home_adj_new, away_adj_new[1,1],0) * pts_per_kick_new)
-  colnames(biv_pois_new) <- c('home', 'away')
-  home_mean_new <- median(biv_pois_new$home)
-  away_mean_new <- median(biv_pois_new$away)
-  moneyline <- as.data.frame(cbind(biv_pois_new$home, biv_pois_new$away))
-  colnames(moneyline) <- c('home', 'away')
-  moneyline$winner <- ifelse(moneyline$home > moneyline$away, 1,0)
-  home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
-  away_moneyline <- 1-home_moneyline
-  total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(median(total_new), quantile(total_new, probs = c(0.40,0.60)))
-  output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
-  final_df_new <- rbind(final_df_new, output_new)
-  colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
-  
-  #histogram
-  pt_diff <- data.frame(biv_pois_new$home - biv_pois_new$away)
-  colnames(pt_diff) <- 'spread'
-  
-  d2 <- pt_diff %>%
-    summarize(lower = quantile(spread, probs = 0.40),
-              upper = quantile(spread, probs = 0.60))
-  p <- ggplot(pt_diff, aes(x = spread)) +
-        geom_density(aes(fill = 'red')) +
-        geom_vline(data = d2, aes(xintercept = lower)) +
-        annotate('text', label = round(d2$lower, 2), x = d2$lower-20, y = .010) + 
-        geom_vline(data = d2, aes(xintercept = upper)) +
-        annotate('text', label = round(d2$upper,2), x = d2$upper+20, y = .010) +
-        ggtitle(paste0(current_week$home.team.name[k],' vs. ', current_week$away.team.name[k]))
-
-  spread_list[[k]] <- p
-  
-  total <- data.frame(biv_pois_new$home + biv_pois_new$away)
-  colnames(total) <- 'overunder'
-
-  d3 <- total %>%
-    summarize(lower = quantile(overunder, probs = 0.36),
-              upper = quantile(overunder, probs = 0.64))
-  p2 <- ggplot(total, aes(x = overunder)) +
-    geom_density(aes(fill = 'green')) +
-    geom_vline(data = d3, aes(xintercept = lower)) +
-    annotate('text', label = round(d3$lower, 2), x = d3$lower-20, y = .010) + 
-    geom_vline(data = d3, aes(xintercept = upper)) +
-    annotate('text', label = round(d3$upper,2), x = d3$upper+20, y = .010) +
-    ggtitle(paste0(current_week$home.team.name[k],' vs. ', current_week$away.team.name[k]))
-  
-  total_list[[k]] <- p2
-  
+  pts_2023 <- rnorm(100000, pts_per_kick_2023, kick_sd_2023)
+  biv_pois_2023 <- as.data.frame(rbvpois(100000, as.numeric(home_adj_2023), as.numeric(away_adj_2023),0))
+  biv_pois_2023 <- as.data.frame(cbind(biv_pois_2023,pts_2023))
+  biv_pois_2023 <- as.data.frame(cbind((biv_pois_2023$V1 * biv_pois_2023$pts_2023),
+                                       (biv_pois_2023$V2 * biv_pois_2023$pts_2023)))
+  colnames(biv_pois_2023) <- c('home', 'away')
+  home_mean_2023 <- mean(biv_pois_2023$home)
+  away_mean_2023 <- mean(biv_pois_2023$away)
+  total_2023 <- biv_pois_2023$home + biv_pois_2023$away
+  total_quant_2023 <- c(mean(total_2023), quantile(total_2023, probs = c(0.40,0.60)))
+  output_2023 <- data.frame(new_week_2023$date[k], new_week_2023$home.team.name[k], new_week_2023$away.team.name[k], round(home_mean_2023,2), round(away_mean_2023,2), round(home_mean_2023 - away_mean_2023,2), round(total_quant_2023[1],2), round(total_quant_2023[2],2), round(total_quant_2023[3],2))
+  final_df_new <- rbind(final_df_new, output_2023)
   
 }
-
+colnames(final_df_new) <- c('Date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score',
+                            'spread', 'total', 'low_quantile', 'high_quantile')
 write.csv(final_df_new, 'final_df_14.csv', row.names = FALSE)
 
 ############################################################################################################
