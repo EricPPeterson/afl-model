@@ -1,0 +1,7 @@
+"date","home_team","away_team","home_mean_score","away_mean_score","side","total","total_low_quantile","total_high_quantile","home_moneyline","away_moneyline"
+"2023-06-15","Port Adelaide","Geelong","74.63","80.85","-6.22","155.48","152.37","161.7","0.39","0.61"
+"2023-06-16","Brisbane Lions","Sydney","87.2","71.05","16.15","158.25","151.79","164.7","0.71","0.29"
+"2023-06-17","Greater Western Sydney","Fremantle","64.72","64.72","0","132.38","126.5","135.32","0.48","0.52"
+"2023-06-17","Richmond","St Kilda","80.92","71.59","9.34","152.51","146.28","158.73","0.63","0.37"
+"2023-06-18","Carlton","Gold Coast","81.15","68.67","12.48","149.82","143.57","156.06","0.72","0.28"
+"2023-06-18","North Melbourne","Western Bulldogs","55.25","92.08","-36.83","150.39","144.25","153.46","0.04","0.96"
