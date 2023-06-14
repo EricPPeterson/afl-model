@@ -41,7 +41,7 @@ theODDS_date <- paste0('date=',start_date,'T00:00:00Z')
 odds_df <- data.frame()
 y <- 1
 
-while(start_date <= as.Date('2023-05-13')){
+while(start_date <= as.Date('2023-06-14')){
   theODDS_fullAPI <- paste0(theODDS_base, theODDS_sport, theODDS_key, theODDS_region, theODDS_date)
   
   pull_API <- fromJSON(theODDS_fullAPI)
@@ -1154,7 +1154,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 13){
+while(n < 14){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1296,7 +1296,7 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 14)
+  select(-c('Second')) %>% filter(round.roundNumber == 15)
 
 #align home team names
 current_week <- sched_team(current_week)
@@ -1424,7 +1424,7 @@ for(k in 1:nrow(current_week)){
   
 }
 
-write.csv(final_df_new, 'final_df_14.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_15.csv', row.names = FALSE)
 
 ############################################################################################################
 #power rankings
