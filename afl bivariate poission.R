@@ -25,6 +25,7 @@ library(tidyr)
 #determine lambda 3 for bivariate model correlation
 #weight recent performance over past?
 #age curve for teams. 
+#add variance to pts-per-shot by making that a RV.
 
 #################################################################################################################
 #Odds API
@@ -688,11 +689,12 @@ docklands <- function(df){
   df$windspeed <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0,df$windspeed)
   df$precip <- ifelse(df$home_ground == 'Docklands Stadium' & df$precip > 0,0,df$precip)
   df$precipprob <- ifelse(df$home_ground == 'Docklands Stadium' & df$precipprob > 0,0,df$precipprob)
+  df$temp <- ifelse(df$home_ground == 'Docklands Stadium' & df$temp < 70, 70, df$temp)
   return(df)
 }
 pts_per_shot <- docklands(pts_per_shot)
 write.csv(pts_per_shot, 'pts_per_shot.csv', row.names = FALSE)
-
+pts_per_shot <- read.csv("~/GitHub/afl-model/pts_per_shot.csv")
 ############################################################################################################
 #build ensemble models to predict points per kick
 #start with random forest
@@ -895,6 +897,9 @@ weather_output_2022 <- weather_function(sched_2022, weather_api_base, API_KEY)
 colnames(weather_output_2022)[1:4] <- c('date', 'lat', 'long', 'hour')
 weather_output_2022$hour <- as.integer(weather_output_2022$hour)
 
+write.csv(weather_output_2022, 'weather_output_2022.csv', row.names = FALSE)
+weather_output_2022 <- read.csv("~/GitHub/afl-model/weather_output_2022.csv")
+
 ##############################################################################################################
 #attach weather to points per kick df
 ##############################################################################################################
@@ -921,8 +926,8 @@ update_df_final <- data.frame(sched_2022) %>% select(home.team.name) %>% unique(
 colnames(update_df_final) <- 'player_team'
 lambda_loop <- lambda_initial_2022
 lambda_loop <- lambda_loop %>% 
-  mutate(alpha = mean_shots * 22,
-         beta = 22)
+  mutate(alpha = mean_shots * 6,
+         beta = 6)
 def_corr_update <- def_stats_2021
 updated_stats <- season_pull(2022,2022)
 output_df <- data.frame()
@@ -1102,7 +1107,7 @@ sched_2023_all$away_lat <- lookup(sched_2023_all$away_city, aus_cities$City, aus
 sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Long)
 
 #filter games from 2023 that have already happened
-sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 12)
+sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 13)
 sched_2023$Date <- as.character(sched_2023$Date)
 sched_2023$Hour <- as.integer(sched_2023$Hour)
 colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
@@ -1115,6 +1120,10 @@ weather_output_2023 <- weather_function(sched_2023, weather_api_base, API_KEY)
 colnames(weather_output_2023)[1:4] <- c('date', 'lat', 'long','hour')
 weather_output_2023$hour <- as.integer(weather_output_2023$hour)
 weather_output_2023$date <- as.character(weather_output_2023$date)
+
+write.csv(weather_output_2023, 'weather_output_2023.csv', row.names = FALSE)
+weather_output_2023 <- read.csv("~/GitHub/afl-model/weather_output_2023.csv")
+
 
 ##############################################################################################################
 #attach weather to points per kick df 2023
@@ -1141,8 +1150,8 @@ update_df_final_2023 <- data.frame(sched_2023) %>% select(home.team.name) %>% un
 colnames(update_df_final_2023) <- 'player_team'
 lambda_loop_2023 <- lambda_initial_2023
 lambda_loop_2023 <- lambda_loop_2023 %>% 
-  mutate(alpha = mean_shots * 22,
-         beta = 22)
+  mutate(alpha = mean_shots * 6,
+         beta = 6)
 def_corr_update_2023 <- def_stats_2022
 updated_stats_2023 <- season_pull(2023,2023)
 output_df_2023 <- data.frame()
@@ -1382,7 +1391,7 @@ for(k in 1:nrow(current_week)){
   home_moneyline <- sum(moneyline$winner) / nrow(moneyline)
   away_moneyline <- 1-home_moneyline
   total_new <- biv_pois_new$home + biv_pois_new$away
-  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.40,0.60)))
+  total_quant_new <- c(mean(total_new), quantile(total_new, probs = c(0.35,0.65)))
   output_new <- c(current_week$date[k], current_week$home.team.name[k], current_week$away.team.name[k], round(home_mean_new,2), round(away_mean_new,2), round(home_mean_new - away_mean_new,2), round(total_quant_new,2), round(home_moneyline,2), round(away_moneyline,2))
   final_df_new <- rbind(final_df_new, output_new)
   colnames(final_df_new) <- c('date', 'home_team', 'away_team', 'home_mean_score', 'away_mean_score', 'side', 'total', 'total_low_quantile', 'total_high_quantile', 'home_moneyline', 'away_moneyline')
