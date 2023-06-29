@@ -1107,7 +1107,7 @@ sched_2023_all$away_lat <- lookup(sched_2023_all$away_city, aus_cities$City, aus
 sched_2023_all$away_lon <- lookup(sched_2023_all$away_city, aus_cities$City, aus_cities$Long)
 
 #filter games from 2023 that have already happened
-sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 13)
+sched_2023 <- sched_2023_all %>% filter(round.roundNumber <= 14)
 sched_2023$Date <- as.character(sched_2023$Date)
 sched_2023$Hour <- as.integer(sched_2023$Hour)
 colnames(sched_2023)[c(4,6,15:17)] <- c('date', 'hour', 'city', 'lat', 'long')
@@ -1163,7 +1163,7 @@ colnames(combined_defense_2023) <- c('player_team', 'mean_game_shots_0', 'league
 #set initial n
 n = 1
 
-while(n < 14){
+while(n < 15){
   final_df_2023 <- data.frame()
   #filter to just current week
   new_week_2023 <- sched_2023_weather %>% filter(round.roundNumber == n)
@@ -1305,7 +1305,7 @@ current_week <- fetch_fixture(season = 2023) %>%
   select(c(compSeason.year, utcStartTime, round.roundNumber, home.team.name, home.team.abbreviation, home.team.nickname, away.team.name, away.team.abbreviation, away.team.nickname)) %>%
   separate(utcStartTime, c('Date', 'Time'), 'T') %>%
   separate(Time, c('Hour', 'Minute', 'Second'), ':') %>%
-  select(-c('Second')) %>% filter(round.roundNumber == 15)
+  select(-c('Second')) %>% filter(round.roundNumber == 17)
 
 #align home team names
 current_week <- sched_team(current_week)
@@ -1433,7 +1433,7 @@ for(k in 1:nrow(current_week)){
   
 }
 
-write.csv(final_df_new, 'final_df_15.csv', row.names = FALSE)
+write.csv(final_df_new, 'final_df_17.csv', row.names = FALSE)
 
 ############################################################################################################
 #power rankings
